@@ -1,0 +1,24 @@
+-R . QueryArrow
+Tactics.v
+Utils.v
+Algebra/SetoidUtils.v
+Algebra/SetoidCat.v
+Algebra/Functor.v
+Algebra/FoldableFunctor.v
+Algebra/Applicative.v
+Algebra/Traversable.v
+Algebra/Monad.v
+Algebra/Alternative.v
+Algebra/NearSemiRing.v
+Algebra/Monoid.v
+Algebra/PairUtils.v
+Algebra/ListUtils.v
+Algebra/MonoidUtils.v
+Algebra/Maybe.v
+Algebra/Store.v
+Algebra/ContT.v
+Algebra/StoreHeap.v
+Definitions.v
+Expr.v
+Assert.v
+Command.v

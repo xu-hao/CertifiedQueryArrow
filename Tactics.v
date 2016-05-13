@@ -58,12 +58,6 @@ Ltac prove_by_inversion := match goal with
 
 Ltac prove_by_equiv := try reflexivity; try prove_by_inversion.
 
-Ltac equiv a b H := assert (a == b); [ rewrite H; reflexivity | destruct a, b ; [prove_by_equiv | prove_by_equiv | prove_by_equiv | prove_by_equiv ] ].
-
-Ltac matchequiv H := match goal with
-                        | |- _ (match ?a with _ => _ end) ( match ?b with _ => _ end) => equiv a b H
-                      end.
-
 Ltac rewrites :=
   repeat multimatch goal with
        | H : ?x == _ |- context [?x] => rewrite H
@@ -71,3 +65,10 @@ Ltac rewrites :=
                      (*     | H : liftR equiv ?x _ |- context [?x] => rewrite H*)
                         end.
 Ltac rewritesr := rewrites; reflexivity. 
+
+Ltac equiv a b := assert (a == b); [ rewrites; reflexivity | destruct a, b ; [prove_by_equiv | prove_by_equiv | prove_by_equiv | prove_by_equiv ] ].
+
+Ltac matchequiv := match goal with
+                        | |- _ (match ?a with _ => _ end) ( match ?b with _ => _ end) => equiv a b
+                      end.
+

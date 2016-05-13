@@ -114,7 +114,7 @@ Qed.
 
 Lemma eval_injF : forall A B (SA : Setoid A) (SB : Setoid B)
                    a (f : A -> B) pr,
-                    injF f pr @ a == f a.
+                    injF f pr @ a = f a.
 Proof.
   intros. simpl. reflexivity.
 Qed.
@@ -259,4 +259,6 @@ Ltac simpl_equiv := unfold equiv;
     | |- ?eq _ _ => simpl eq
   end;
   unfold arrEquiv; intros;  normalize.
+
+  Definition evalS {A B} {AS : Setoid A} {BS : Setoid B} := injF2  (@eval _ _ AS BS) _.
 

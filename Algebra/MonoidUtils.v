@@ -51,3 +51,25 @@ Proof.
   bindproper. simpl. arrequiv. normalize_monad. bindproper. simpl. arrequiv. normalize_monad. bindproper. simpl. normalize_monad. simpl. rewrite associativity_monoid. reflexivity.
 Defined.
 End MonadMonoid.
+
+Section NatMonoid.
+
+  Definition plusS : natS ~> natS ~~> natS := injF2 plus _.
+
+  Open Scope nat_scope.
+
+  Lemma nat_plus_associativity : forall a b c, a + b + c = a + (b + c).
+  Proof.
+    intros. induction a. reflexivity.
+    simpl. congruence.
+  Qed.
+
+  Instance nat_Monoid : @Monoid nat natS.
+  Proof.
+    exists (0) (plusS).
+    intros. reflexivity.
+    intros. rewrite plus_n_O. reflexivity.
+    intros. apply nat_plus_associativity.
+  Defined.
+
+End NatMonoid.

@@ -210,6 +210,13 @@ Section Fold_rightS.
     reflexivity.
     simpl ((_ :: _) ++ _).  repeat  rewrite fold_rightS_cons. rewritesr. 
   Qed.
+  Lemma fold_right_cons : forall A B (f : A -> B -> B) (b : B) (a : A) (l : list A),
+                            fold_right f b (a :: l) = f a (fold_right f b l).
+  Proof.
+    reflexivity.
+  Qed.
+  
+
   Lemma fold_right_app :
     forall {A B} {SA : Setoid A} {SB : Setoid B} (f : A -> B -> B) (b : B) (l l2 : list A) ,
       fold_right f b (l ++ l2) = fold_right f (fold_right f b l2) l.

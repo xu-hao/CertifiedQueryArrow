@@ -1,100 +1,147 @@
-Require Import Assert Utils Algebra.Monad Algebra.SetoidUtils Algebra.ListUtils Algebra.SetoidCat Algebra.StoreHeap Algebra.ContT Algebra.Store Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.MonoidUtils Algebra.FoldableFunctor Algebra.PairUtils Algebra.Functor Algebra.Alternative Algebra.Maybe Algebra.Applicative.
+Require Import Assert Utils Algebra.Monad Algebra.SetoidUtils Algebra.ListUtils Algebra.SetoidCat Algebra.StoreHeap Algebra.ContT Algebra.Store Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.MonoidUtils Algebra.FoldableFunctor Algebra.PairUtils Algebra.Functor Algebra.Alternative Algebra.Maybe Algebra.Applicative Algebra.MonoidUtils.
 
 Require Import List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
 Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A ) := times @ a @ b == times @ b @ a.
 
+Section Command.
+  Context
+    {val : Type}
+    {builtInExpr : Type}
+    {builtInFormula : Type}
+    {builtInCommand : Type}.
 
+  Definition expr := @expr val builtInExpr. 
   
-Inductive formula :=
-| formFilter : expr -> pred -> expr -> formula
-| formBuiltInFilter : builtin -> list expr -> formula
-| formLookupBySubject : expr -> pred -> var -> formula
-| formLookupByObject : var -> pred -> expr -> formula
-| formLookupByPred : var -> pred -> var -> formula
-| formAnd : formula -> formula -> formula
-| formOr : formula -> formula -> formula
-| formExists : var -> formula -> formula
-| formNot : formula -> formula
-| formTrue : formula
-.
+  Inductive formula :=
+  | formFilter : expr -> pred -> expr -> formula
+  | formBuiltInFilter : builtInFormula -> list expr -> formula
+  | formLookupBySubject : expr -> pred -> var -> formula
+  | formLookupByObject : var -> pred -> expr -> formula
+  | formLookupByPred : var -> pred -> var -> formula
+  | formAnd : formula -> formula -> formula
+  | formOr : formula -> formula -> formula
+  | formExists : var -> formula -> formula
+  | formNot : formula -> formula
+  | formTrue : formula
+  .
 
+
+  Program Instance formulaS : Setoid formula.
+
+  Inductive command :=
+  | cClassical : formula -> command
+  | cNewAddr : var -> type -> command
+  | cBuiltIn : builtInCommand -> list expr -> command
+  | cLookupBySubject : expr -> pred -> var -> command
+  | cLookupByObject : var -> pred -> expr -> command
+  | cLookupByPred : var -> pred -> var -> command
+  | cMutate : expr -> pred -> expr -> command
+  | cDelete : expr -> command
+  | cSeq : command -> command -> command
+  | cChoice : command -> command -> command
+  | cOne : command
+  | cZero : command
+  .
+
+  Program Instance commandS : Setoid command.
+
+  Fixpoint formFreeVars form :=
+    match form with
+      | formFilter expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
+      | formBuiltInFilter builtin exprs => fold_right FSetNat.union ∅ (map exprFreeVars exprs)
+      | formLookupBySubject  expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
+      | formLookupByObject  var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
+      | formLookupByPred  var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
+      | formNot form => formFreeVars form
+      | formExists v form => FSetNat.diff (formFreeVars form) (﹛ v ﹜)
+      | formAnd comm  comm2 => formFreeVars comm ∪ formFreeVars comm2
+      | formOr comm  comm2 => formFreeVars comm ∪ formFreeVars comm2
+      | formTrue => ∅
+    end
+  .
+  
+  Fixpoint cFreeVars comm :=
+    match comm with
+      | cClassical form => formFreeVars form
+      | cNewAddr var type  => ﹛ var ﹜
+      | cBuiltIn _ exprs => fold_right FSetNat.union ∅ (map exprFreeVars exprs)
+      | cLookupBySubject expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
+      | cLookupByObject var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
+      | cLookupByPred var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
+      | cMutate expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
+      | cDelete expr => exprFreeVars expr
+      | cSeq comm comm2 => cFreeVars comm ∪ cFreeVars comm2
+      | cChoice comm comm2 => cFreeVars comm ∪ cFreeVars comm2
+      | cOne => ∅
+      | cZero => ∅
+    end
+  .
+End Command.
 Notation "a ∧ b" := (formAnd a b) (left associativity, at level 81).
 Notation "a ∨ b" := (formOr a b) (left associativity, at level 82).
 Notation "∃ a : b" := (formExists a b) (at level 83).
 Notation "¬ a" := (formNot a) (at level 80).
 Notation "⊤" := (formTrue) (at level 80).
 
-Program Instance formulaS : Setoid formula.
-
-Inductive command :=
-| classical : formula -> command
-| cNewAddr : var -> command
-| cLookupBySubject : expr -> pred -> var -> command
-| cLookupByObject : var -> pred -> expr -> command
-| cLookupByPred : var -> pred -> var -> command
-| mutate : expr -> pred -> expr -> command
-| cDelete : expr -> command
-| seq : command -> command -> command
-| choice : command -> command -> command
-| one : command
-| zero : command
-.
-
-Program Instance commandS : Setoid command.
-
-Fixpoint formFreeVars form :=
-  match form with
-    | formFilter expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-    | formBuiltInFilter builtin exprs => fold_right FSetNat.union ∅ (map exprFreeVars exprs)
-    | formLookupBySubject  expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
-    | formLookupByObject  var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
-    | formLookupByPred  var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
-    | formNot form => formFreeVars form
-    | formExists v form => FSetNat.diff (formFreeVars form) (﹛ v ﹜)
-    | comm ∧ comm2 => formFreeVars comm ∪ formFreeVars comm2
-    | comm ∨ comm2 => formFreeVars comm ∪ formFreeVars comm2
-    | formTrue => ∅
-  end
-.
-
-Fixpoint cFreeVars comm :=
-  match comm with
-    | classical form => formFreeVars form
-    | cNewAddr var  => ﹛ var ﹜
-    | cLookupBySubject expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
-    | cLookupByObject var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
-    | cLookupByPred var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
-    | mutate expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-    | cDelete expr => exprFreeVars expr
-    | seq comm comm2 => cFreeVars comm ∪ cFreeVars comm2
-    | choice comm comm2 => cFreeVars comm ∪ cFreeVars comm2
-    | one => ∅
-    | zero => ∅
-  end
-.
-
-Notation "𝟏" := (one) (at level 82).
-Notation "𝟎" := (zero) (at level 82).
-Notation "a ⊗ b" := (seq a b) (left associativity, at level 86).
-Notation "a ⊕ b" := (choice a b) (left associativity, at level 87).
+Notation "𝟏" := (cOne) (at level 82).
+Notation "𝟎" := (cZero) (at level 82).
+Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
+Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
 
 
+Module Type BuiltInFormula (VT : ValType) (S : Store VT) (H : Heap VT).
+  Import VT.
+  Parameter builtInFormula : Type.
+  Parameter builtInFormulaS : Setoid builtInFormula.
+  Parameter appBIF : builtInFormulaS ~> listS valS ~~> H.tS ~~> S.tS ~~> H.lS _ S.tS.
+End BuiltInFormula.
 
+Section Types.
 
-Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
+  Context
+    {H}
+    {HS : Setoid H}
+    {S}
+    {SS : Setoid S}
+    {l}
+    {lS : forall A (AS : Setoid A), Setoid (l A AS)}.
+  
+  Definition state0 A {AS : Setoid A} : Type := @sh _ HS _ SS _ (lS) _ unitS _ AS.
+
+  Instance state0S {A} (AS : Setoid A) : Setoid (state0 A) := @shS _ HS _ SS _ (lS) _ unitS _ AS.
+
+End Types.
+
+Module Type BuiltInCommand (VT : ValType) (S : Store VT) (H : Heap VT).
+  Import VT.
+  Definition state A {AS : Setoid A} : Type := @state0 _ H.tS _ S.tS _ (H.lS) _ AS.
+
+  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @state0S _ H.tS _ S.tS _ (H.lS) _ AS.
+  Parameter builtInCommand : Type.
+  Parameter builtInCommandS : Setoid builtInCommand.
+  Parameter appBIC : builtInCommandS ~> listS valS ~~> stateS unitS.
+End BuiltInCommand.
+
+Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : Heap VT) (BIF : BuiltInFormula VT S H) (BIC : BuiltInCommand VT S H).
   Open Scope type_scope.
-  Module EM := ExprModel B S.
-  Import EM S H.
-
+  Module EM := ExprModel VT BIE S.
+  Module HU := HeapUtils VT H.
+  Import VT EM S H HU BIE BIF BIC.
+  Definition formula := @formula val builtInExpr builtInFormula.
+  Instance formulaS : Setoid formula := @formulaS val builtInExpr builtInFormula.
+  Definition command := @command val builtInExpr builtInFormula builtInCommand.
+  Instance commandS : Setoid command := @commandS val builtInExpr builtInFormula builtInCommand.
       
-  Definition state A {AS : Setoid A} := @sh _ H.tS _ S.tS _ (lS) _ (lS _ S.tS) _ AS.
+  Definition state A {AS : Setoid A} : Type := @state0 _ H.tS _ S.tS _ (lS) _ AS.
 
-  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @shS _ H.tS _ S.tS _ (lS) _ (lS _ S.tS) _ AS.
+  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @state0S _ H.tS _ S.tS _ (lS) _ AS.
 
-  Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad .
+  Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad.
 
-  Set Printing Implicit.
+  Definition stateStoreHeapS := @storeHeapS _ H.tS _ S.tS _ (lS) _ unitS.
+
+  Definition runState {A B} {AS : Setoid A} {BS : Setoid B} : stateS AS ~> (AS ~~> stateStoreHeapS) ~~> stateStoreHeapS := runSh. 
 
   Existing Instance alternative_Monoid.
   Existing Instance list_Alternative.
@@ -127,7 +174,7 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
       | None => stop
       end).
     Proof.
-      autounfold. intros. matchequiv H. simpl in H. rewritesr.
+      autounfold. intros. matchequiv. simpl in H. rewritesr.
     Qed.
     apply stopNone_1.
   Defined.
@@ -136,20 +183,190 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
     simple refine (injF (fun b : bool => if b then ret @ tt else stop) _).
   Defined.
 
+  Definition andbS : boolS ~> boolS ~~> boolS.
+    simple refine (injF2 andb _).
+  Defined.
+
+  Definition negbS : boolS ~> boolS.
+    simple refine (injF negb _).
+  Defined.
+  
+  
+  Instance bool_and_Monoid : @Monoid bool boolS.
+  Proof.
+    exists (true) (andbS).
+    intros. reflexivity.
+    intros. simpl. destruct a. reflexivity. reflexivity.
+    intros. simpl. destruct a. reflexivity. reflexivity.
+  Defined.
+
+  Definition null_l {A} {AS : Setoid A} : H.lS _ AS ~> boolS.
+    simple refine (injF (fun l => fold @ (constS _ @ false <$> l)) _).
+    exact boolS.
+    apply H.lS.
+    exact H.func.
+    exact H.foldable.
+    exact bool_and_Monoid.
+    apply H.lS.
+    exact H.func.
+    Lemma null_l_1 : forall A AS, Proper (equiv ==> equiv)
+     (fun l0 : l A AS =>
+      fold @
+            (constS _ @ false <$> l0)).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply null_l_1.
+  Defined.
+
+  Definition notNull_l {A} {AS : Setoid A} : H.lS _ AS ~> boolS := negbS ∘ null_l .
+
+  Definition stopNotNull {A} {AS : Setoid A} : H.lS _ AS ~> stateS unitS.
+    simple refine (injF (fun l => if null_l @ l then ret @ tt else stop) _).
+    intros. apply stateS.
+    exact state_Monad.
+    Lemma stopNotNull_1 : forall A AS, @Proper (l A AS -> @state unit unitS)
+     (@equiv (l A AS) (lS A AS) ==>
+      @equiv (@state unit unitS) (@stateS unit unitS))
+     (fun l0 : l A AS =>
+      if @null_l A AS @ l0
+      then
+       @ret state (fun (A0 : Type) (AS0 : Setoid A0) => @stateS A0 AS0)
+         state_Monad unit unitS @ tt
+      else @stop unit unitS).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply stopNotNull_1.
+  Defined.
+
+  Definition stopNull {A} {AS : Setoid A} : H.lS _ AS ~> stateS unitS.
+    simple refine (injF (fun l => if notNull_l @ l then ret @ tt else stop) _).
+    intros. apply stateS.
+    exact state_Monad.
+    Lemma stopNull_1 : forall A AS, Proper (equiv ==> equiv)
+     (fun l0 : l A AS =>
+      if notNull_l @ l0
+      then
+       @ret state (fun (A0 : Type) (AS0 : Setoid A0) => @stateS A0 AS0)
+         state_Monad unit unitS @ tt
+      else @stop unit unitS).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply stopNull_1.
+  Defined.
+
   Definition evalExpr : exprS ~> stateS valS.
     simple refine (injF (fun expr1 => 
     getStore >>= ret ∘ (exprEval' @ expr1) >>= stopNone) _).
   Defined.
-  
-  
 
+  Existing Instance valS.
+  (* update var in store *)
+  Definition updateVar (var1 : var) : valS ~> stateS unitS.
+    refine (injF (fun val1 =>  
+    
+                    updateStore @ (S.update @ var1 @ val1)) _).
+    Lemma updateVar_1 : forall var1, Proper (equiv ==> equiv)
+                                            (fun val1 : val => updateStore @ (S.update @ var1 @ val1)).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply updateVar_1.
+  Defined.
+
+  Definition updateVar2 (var1 : var) : H.tS ~*~ valS ~> stateS unitS.
+    simple refine (injF (fun ha : H.t * val  => let (h', addr) := ha in putHeap @ h' >> updateVar var1 @ addr) _).
+    intros. apply stateS.
+    exact state_Monad.
+    Lemma updateVar2_1 : forall var1, Proper (equiv  ==> equiv)
+     (fun ha : t * val =>
+      let (h', addr) := ha in
+      andThen @ (putHeap @ h') @ (updateVar var1 @ addr)).
+    Proof.
+      autounfold. intros. rewrites. destruct x,y. destruct H. rewritesr.
+    Qed.
+    apply updateVar2_1.    
+  Defined.
+  
+  Definition branch (var1 : var) : H.lS _ valS ~> stateS unitS :=
+    choice ∘ fmap @ (updateVar var1).
+  
+  Definition branch2 (var1 var2 : var) : H.lS _ (valS ~*~ valS) ~> stateS unitS.
+    refine (choice ∘ fmap @ (injF (fun val1 => updateVar var1 @ (fst val1) >> updateVar var2 @ (snd val1)) _)).
+    Lemma branch2_1 : forall var1 var2, Proper (equiv ==> equiv)
+                                           (fun val1 : val * val =>
+                                              
+                                              (updateVar var1 @ fst val1) >> (updateVar var2 @ snd val1)).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply branch2_1.
+  Defined.
+  
+  Definition branchStore : H.lS _ S.tS ~> stateS unitS :=
+    choice ∘ (fmap @ putStore).
+
+  (* we define a run function that retrives all stores *)
+  Definition _retCont : S.tS ~> H.lS _ (S.tS ~*~ unitS).
+    simple refine (injF (fun (s' : S.t) => pure @ (s', tt) : H.l (S.t * unit) (S.tS ~*~ unitS)) _).
+    apply H.lS.
+    apply H.func.
+    apply H.app.
+    Lemma _retCont_1 : @Proper (S.t -> l (S.t * unit) (S.tS ~*~ unitS))
+     (@equiv S.t S.tS ==>
+      @equiv (l (S.t * unit) (S.tS ~*~ unitS))
+        (lS (S.t * unit) (S.tS ~*~ unitS)))
+     (fun s' : S.t =>
+      @pure l lS func app (S.t * unit) (S.tS ~*~ unitS) @ (s', tt)
+      :
+        l (S.t * unit) (S.tS ~*~ unitS)).
+    Proof.
+      solve_proper.
+    Qed.
+    apply _retCont_1.
+  Defined.
+  
+  Definition retCont : unitS ~> stateStoreHeapS :=
+    constS unitS @ (curryS @ (idS *** _retCont)).
+
+ 
+ Unset Printing Implicit.
+
+  Definition extractStores : stateS unitS ~> H.tS ~~> S.tS ~~> H.tS ~*~ H.lS _ S.tS.
+    simple refine (injF3 (fun a h s => (idS *** fmap @ fstS) @ (runSh @ a @ retCont @ h @ s)) _).
+    apply H.tS.
+    apply H.lS.
+    apply H.func.
+    Lemma extractStores_1 : Proper (equiv ==> equiv ==> equiv ==> equiv)
+     (fun (a : (unitS ~~> storeHeapS unitS) ~> storeHeapS unitS) 
+        (h : t) (s : S.t) =>
+      (idS *** fmap @ fstS) @ (runSh @ a @ retCont @ h @ s)).
+    Proof.
+      solve_proper.
+    Qed.
+    apply extractStores_1.
+  Defined.
+  
+  Definition run : stateS unitS  ~> stateS (H.lS _ S.tS).
+    simple refine (injF4 (fun (a : state unit) (c : H.lS _ S.tS ~> stateStoreHeapS) (h : H.t) (s : S.t) => let (h', r) := (extractStores @ a @ h @ s) in c @ r @ h' @ s) _).
+    Lemma run_1 : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv)
+     (fun (a : state unit) (c : lS S.t S.tS ~> stateStoreHeapS) 
+        (h : t) (s : S.t) =>
+      let (h', r) := extractStores @ a @ h @ s in c @ r @ h' @ s).
+    Proof.
+      repeat autounfold. intros. simpl_let. simpl_let. rewritesr. 
+    Qed.
+    apply run_1.
+  Defined.
 
 
   Section LookupBySPOGeneric.
     Context (expr1 : expr) (pred1 : pred) (expr2 :expr).
 
     Definition lookupBySPOGeneric  : state unit :=
-      (H.lookupBySPO
+      (lookupBySPO
         <$> evalExpr @ expr1
         <*> pure @ pred1
         <*> evalExpr @ expr2
@@ -162,11 +379,6 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
     solve_proper.
   Qed.
   
-  Definition updateStore (var1 : var) : valS ~> stateS unitS.
-    refine (injF (fun val1 =>  
-    
-                    S.update @ var1 @ val1 <$> getStore >>= putStore) _).
-  Defined.
   
   
   Section LookupBySubjectGeneric.
@@ -174,10 +386,10 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
       (expr1 : expr) (pred1 : pred) (var1 : var).
 
     Definition lookupBySubjectGeneric  : state unit :=
-      (H.lookupBySubject
+      (H.read
          <$> evalExpr @ expr1
          <*> pure @ pred1
-         <*> getHeap) >>= stopNone >>= updateStore var1
+         <*> getHeap) >>= stopNone >>= updateVar var1
       .
   End LookupBySubjectGeneric.
   Instance lookupBySubjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySubjectGeneric.
@@ -186,9 +398,6 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
   Qed.
 
 
-  Definition branch (var1 : var) : H.lS _ valS ~> stateS unitS :=
-    choice ∘ fmap @ (updateStore var1).
-  
 
   Section LookupByObjectGeneric.
     Context
@@ -205,18 +414,7 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
     solve_proper. 
   Qed.
 
-  Definition branch2 (var1 var2 : var) : H.lS _ (valS ~*~ valS) ~> stateS unitS.
-    refine (choice ∘ fmap @ (injF (fun val1 => updateStore var1 @ (fst val1) >> updateStore var2 @ (snd val1)) _)).
-    Lemma branch2_1 : forall var1 var2, Proper (equiv ==> equiv)
-                                           (fun val1 : val * val =>
-                                              
-                                              (updateStore var1 @ fst val1) >> (updateStore var2 @ snd val1)).
-    Proof.
-      intros. solve_proper.
-    Qed.
-    apply branch2_1.
-  Defined.
-  
+
   Section LookupByPredGeneric.
     Context
       (var1 : var) (pred1 : pred) (var2 : var).
@@ -231,50 +429,15 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
     solve_proper.
   Qed.
 
-(*  Definition retList (s : S.t) : projT1 (store0 H.St (listS S.St)) := ret @ (s :: nil). *)
-
-  Existing Instance H.func.
-  Existing Instance H.app.
-  Definition retCont : unitS ~> @storeHeapS _ H.tS _ S.tS _ H.lS _ unitS.
-    simple refine (injF3 (fun _ (h' : H.t) (s' : S.t) => (h', pure @ ((s', tt)::nil))) _).
-    
-  Definition run : stateS unitS  ~> stateS (lS _ S.tS).
-    simple refine (injF4 (fun a c h s => a @ cont @ h @ s) _).
-    Lemma run_1 : properF (fun s0 : S.t => retList s0).
-    Proof.
-      
-      repeat autounfold. intros. simpl. arrequiv. split. constructor. auto. constructor. reflexivity.
-    Qed.
-    apply run_1.
-  Defined.
-
-  Instance run_Proper : Proper (equiv==> equiv) run.
-  Proof.
-    autounfold.  unfold run. intros. rewritesr.
-  Qed.
-
-(*  Definition listCase (a b : state S.t) : listS S.St ~> stateS S.St.
-    simple refine (injF(fun l => if null l then
-                                 a
-                               else
-                                 b) _).
-    Lemma listCase_1 : forall  (a b : state S.t), properF (fun l : list S.t => if null l then a else b).
-    Proof.
-       unfold properF. intros. solve_proper. 
-    Qed.
-    apply listCase_1.
-  Defined.
-
-  Instance listCase_Proper : Proper (equiv ==> equiv ==> equiv) listCase.
-  Proof.
-    autounfold.  unfold listCase. intros. simpl. arrequiv.  destruct (null a). rewritesr. rewritesr.
-  Qed.*)
-
   Section BuiltInFilterGeneric.
     Context
-      (builtin : builtin) (args : list expr).
+      (builtin : builtInFormula) (args : list expr).
     Definition builtInFilterGeneric : state unit :=
-      (BP.app @ builtin <$> mapM @ evalExpr @ args) >>= stopNone >>= stopFalse.
+      (appBIF
+         @ builtin
+         <$> mapM @ evalExpr @ args
+         <*> getHeap
+         <*> getStore) >>= branchStore.
   End BuiltInFilterGeneric.
   Instance builtInFilterGeneric_Proper : Proper (equiv ==> equiv ==> equiv) builtInFilterGeneric.
   Proof.
@@ -284,54 +447,37 @@ Module Semantics (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
   Section NegationGeneric.
     Context
       (a : state unit).
-    Definition negationGeneric : state unit.
-    simple refine (injF (fun s => run (a @ s) >>= listCase (ret @ s) stop) _).
-    Lemma negationGeneric_1 : properF (fun s : S.t => bind @ run (a @ s) @ listCase (ret @ s) stop).
-    Proof.
-      unfold properF. solve_proper.
-    Qed.
-    apply negationGeneric_1.
-    Defined.
+    Definition negationGeneric : state unit := run @ a >>= stopNotNull.
   End NegationGeneric.
   Instance negationGeneric_Proper : Proper (equiv ==> equiv) negationGeneric.
   Proof.
-    autounfold. intros. unfold negationGeneric. arrequiv. simpl_let. rewritesr. 
+    autounfold. intros. unfold negationGeneric. rewritesr.
   Qed.
   
   Section ExistentialQuantificationGeneric.
     Context
-      (a : S.St ~> stateS S.St) (v : var).
-    Definition existentialQuantificationGeneric : S.St ~> stateS S.St.
-    simple refine (injF (fun s => run (a @ (S.delete @ s @ v)) >>= listCase stop (ret @ s)) _).
-Lemma existentialQuantificationGeneric_1 : properF (fun s => run (a @ (S.delete @ s @ v)) >>= listCase stop (ret @ s)).
-Proof.
-  unfold properF. solve_proper.
-Qed.
-apply existentialQuantificationGeneric_1.
-Defined.
+      (a : state unit) (v : var).
+    Definition existentialQuantificationGeneric : state unit :=
+      run @ (updateStore @ (S.delete @ v) >> a) >>= stopNull.
   End ExistentialQuantificationGeneric.
   Instance existentialQuantificationGeneric_Proper : Proper (equiv ==> equiv ==> equiv) existentialQuantificationGeneric.
   Proof.
-    autounfold. intros. unfold existentialQuantificationGeneric. arrequiv. simpl_let. rewritesr.
+    autounfold. intros. unfold existentialQuantificationGeneric. rewritesr. 
   Qed.
+
   Section ClassicalGeneric.
     Context
-      (a : S.St ~> stateS S.St).
-    Definition classicalGeneric : S.St ~> stateS S.St.
-    simple refine (injF (fun s => run (a @ s) >>= listCase stop (ret @ s)) _).
-Lemma classicalGeneric_1 : properF (fun s => run (a @ s) >>= listCase stop (ret @ s)).
-Proof.
-  unfold properF. solve_proper.
-Qed.
-apply classicalGeneric_1.
-Defined.
+      (a : state unit).
+    Definition classicalGeneric : state unit :=
+      run @ a >>= stopNull.
   End ClassicalGeneric.
   Instance classicalGeneric_Proper : Proper (equiv ==> equiv) classicalGeneric.
   Proof.
-    autounfold. intros. unfold classicalGeneric. arrequiv. simpl_let. rewritesr.
+    autounfold. intros. unfold classicalGeneric. rewritesr. 
   Qed.
   
-Fixpoint _formReduce (form : formula) {struct form}: S.St ~> stateS S.St :=
+  Existing Instance sh_NearSemiRing.
+  Fixpoint _formReduce (form : formula) {struct form}: state unit :=
    
     match form with
       | formFilter expr pred expr2  =>
@@ -344,24 +490,19 @@ Fixpoint _formReduce (form : formula) {struct form}: S.St ~> stateS S.St :=
         lookupByObjectGeneric  var pred expr 
       | formLookupByPred var pred var2 =>
         lookupByPredGeneric var pred var2
-      | form0 ∧ form1 => 
-        sh_plus @ (_formReduce form0) @ (_formReduce form1)
+      | form0 ∧ form1 =>
+        plus @ (_formReduce form0) @ (_formReduce form1)
       | form0 ∨ form1 => 
-        sh_times @ (_formReduce form0) @ (_formReduce form1)
+        times @ (_formReduce form0) @ (_formReduce form1)
       | ¬ form =>
         negationGeneric (_formReduce form)
       | ∃ v : form =>
         existentialQuantificationGeneric (_formReduce form)   v      
-      | ⊤ => sh_one
+      | ⊤ => one
     end.
   
-Definition formReduce : formulaS ~> S.St ~~> stateS S.St.
-  refine (injF (fun form => _formReduce form) _).
-  Lemma formReduce_1 : properF (fun form : formula => _formReduce form).
-  Proof.
-    unfold properF. solve_proper.
-  Qed.
-  apply formReduce_1.
+Definition formReduce : formulaS ~> stateS unitS.
+  simple refine (injF _formReduce _).
 Defined.
 
 
@@ -369,44 +510,13 @@ Defined.
 Section MutateGeneric.
   Context
     (expr1 : expr) (pred0 : pred) (expr2 : expr).
-  Definition mutateGeneric : S.St ~> stateS S.St.
-    simple refine (injF (fun s => match ⟦ expr1 ⟧expr s with
-          | Some addr =>
-            match ⟦ expr2 ⟧expr s with
-              | Some val =>
-                lift @ get >>=
-                     injF (fun h => lift @ (put @ ( h [ addr , pred0 ↦ val ] ))) _ >> ret @ s
-              | None => stop
-            end
-          | None => stop
-                                  end) _).
-    Lemma mutateGeneric_1 : forall addr val,  properF (fun h : t => lift @ (put @ h [addr, pred0 ↦ val] )).
-    Proof.
-      unfold properF. intros. solve_proper.
-    Qed.
-    apply mutateGeneric_1.
-    Lemma mutateGeneric_2 : forall pr, properF
-     (fun s : S.t =>
-      match (⟦ expr1 ⟧expr) s with
-      | Some addr =>
-          match (⟦ expr2 ⟧expr) s with
-          | Some val =>
-              andThen @
-              (bind @ (lift @ get) @
-               injF (fun h : t => lift @ (put @ h [addr, pred0 ↦ val] ))
-                 (pr addr val)) @
-              (ret @ s)
-              
-          | None => stop
-          end
-      | None => stop
-      end)
-.
-    Proof.
-      repeat autounfold. intros. matchequiv H. matchequiv H. evalproper. evalproper. evalproper. arrequiv. rewritesr. rewritesr. 
-    Qed.
-apply mutateGeneric_2.
-  Defined.
+
+  Definition mutateGeneric : state unit :=
+    (H.update
+      <$> evalExpr @ expr1
+      <*> pure @ pred0 
+      <*> evalExpr @ expr2
+      <*> getHeap) >>= putHeap.
 End MutateGeneric.
 Instance mutateGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) mutateGeneric.
 Proof.
@@ -415,76 +525,41 @@ Qed.
 
 Section NewAddrGeneric.
   Context
-    (var1 : var).
-  Definition newAddrGeneric : S.St ~> stateS S.St.
-    simple refine (injF (fun s =>
-                    lift @ get >>= injF (fun h => let (h', addr) := H.newAddr @ h in lift @ (put @ h') >> ret @ (s [ var1 ↦ addr ]s) ) _) _).
-    Lemma newAddrGeneric_1 : forall s, properF
-                                         (fun h : t => let (h', addr) := newAddr @ h in lift @ (put @ h') >> ret @ s [var1 ↦ addr ]s).
-    Proof.
-      repeat autounfold. intros. simpl_let. arrequiv.
-    Qed.
-    apply newAddrGeneric_1.
-    Lemma newAddrGeneric_2 : forall pr, properF
-     (fun s : S.t =>
-      bind @ (lift @ get) @
-      injF
-        (fun h : t => let (h', addr) := newAddr @ h in lift @ (put @ h') >> ret @ s [var1 ↦ addr ]s)
-        (pr s)).
-    Proof.
-      repeat autounfold. intros. simpl_let. arrequiv. destruct (newAddr @ a0). simpl. rewritesr.
-    Qed.
-    apply newAddrGeneric_2.
-  Defined.
+    (var1 : var) (type1 : type).
+  Definition newAddrGeneric : state unit :=
+    (H.newAddr @ type1 <$> getHeap) >>= stopNone >>= updateVar2 var1.
 End NewAddrGeneric.
-Instance newAddrGeneric_Proper : Proper (equiv ==> equiv) newAddrGeneric.
+Instance newAddrGeneric_Proper : Proper (equiv ==> equiv ==> equiv) newAddrGeneric.
 Proof.
   solve_proper.
+Qed.
+
+Section BuiltInCommandGeneric.
+  Context
+    (builtin : builtInCommand) (args : list expr).
+  Definition builtInCommandGeneric : state unit :=
+    mapM @ evalExpr @ args >>= appBIC @ builtin.
+End BuiltInCommandGeneric.
+Instance builtInCommandGeneric_Proper : Proper (equiv ==> equiv ==> equiv) builtInCommandGeneric.
+Proof.
+  autounfold.    intros. unfold builtInCommandGeneric. rewritesr. 
 Qed.
 
 Section DeleteGeneric.
   Context
     (expr1 : expr).
-  Definition deleteGeneric : S.St ~> stateS S.St.
-    simple refine (injF (fun s =>          match ⟦ expr1 ⟧expr s with
-          | Some val =>
-            lift @ get >>= injF (fun h => if val ∈? (H.dom @ h) then
-              lift @ (put @ (H.delete @ h @ val)) >> ret @ s
-            else
-              stop) _
-          | None => stop
-        end
-
-                 ) _).
-    Lemma deleteGeneric_1 : forall s val, properF
-     (fun h : t =>
-      if val ∈? (dom @ h)
-      then andThen @ (lift @ (put @ (delete @ h @ val))) @ (ret @ s)
-      else stop).
-    Proof.
-      repeat autounfold. intros. rewrite H.  destruct (val ∈? (dom @ y)). rewritesr. reflexivity.
-    Qed.
-    apply deleteGeneric_1.
-    Lemma deleteGeneric_2 : forall pr, properF
-     (fun s : S.t =>
-      match (⟦ expr1 ⟧expr) s with
-      | Some val =>
-          bind @ (lift @ get) @
-          injF
-            (fun h : t =>
-             if val ∈? (dom @ h)
-             then andThen @ (lift @ (put @ (delete @ h @ val))) @ (ret @ s)
-             else stop) (pr s val)
-      | None => stop
-      end).
-    Proof.
-      repeat autounfold. intros. matchequiv H. evalproper. unfold equiv, exp, arrSetoid, arrEquiv. intros. normalize. rewrite H0. destruct (v0 ∈? (dom @ a)). rewritesr. reflexivity. 
-    Qed.
-    apply deleteGeneric_2.
-  Defined.
+  Definition deleteGeneric : state unit :=
+    (H.delete
+       <$> evalExpr @ expr1
+       <*> getHeap) >>= putHeap.
 End DeleteGeneric.
 
-Fixpoint _reduce (comm : command)  : S.St ~> stateS S.St :=
+Instance DeleteGeneric_Proper : Proper (equiv ==> equiv) deleteGeneric.
+Proof.
+  solve_proper.
+Qed.
+
+Fixpoint _reduce (comm : command)  : state unit :=
     match comm with
       | cLookupBySubject  expr pred var =>
         lookupBySubjectGeneric expr pred var
@@ -493,18 +568,20 @@ Fixpoint _reduce (comm : command)  : S.St ~> stateS S.St :=
       | cLookupByPred  var pred var2 =>
         lookupByPredGeneric var pred var2
       | form0 ⊗ form1 =>
-          sh_times @ (_reduce form0) @ (_reduce form1)
+          times @ (_reduce form0) @ (_reduce form1)
       | form0 ⊕ form1 =>
-        sh_plus @ (_reduce form0) @ (_reduce form1)
-      | mutate expr pred0 expr2 =>
+        plus @ (_reduce form0) @ (_reduce form1)
+      | cMutate expr pred0 expr2 =>
         mutateGeneric expr pred0 expr2
-      | cNewAddr var =>
-        newAddrGeneric var
+      | cNewAddr var type =>
+        newAddrGeneric var type
+      | cBuiltIn builtin exprs =>
+        builtInCommandGeneric builtin exprs
       | cDelete expr =>
         deleteGeneric expr
-      | 𝟏 => sh_one
-      | 𝟎 => sh_zero
-      | classical form =>
+      | 𝟏 => one
+      | 𝟎 => zero
+      | cClassical form =>
         classicalGeneric (formReduce @ form)
     end
   .
@@ -513,15 +590,73 @@ Fixpoint _reduce (comm : command)  : S.St ~> stateS S.St :=
 
    
 
-Definition reduce : commandS ~> S.St ~~> stateS S.St.
-refine (injF (fun comm => _reduce comm) _).
+  Definition reduce : commandS ~> stateS unitS.
+    refine (injF _reduce _).
 
-Lemma reduce_1 : properF (fun comm : command => _reduce comm).
-Proof.
-  unfold properF. solve_proper.
-Qed.
-apply reduce_1.
-Defined.
+  Defined.
+
+
+End CommandModel.
+
+Module SemanticEquivalence (VT : ValType) (BIE : BuiltInExpr VT)  (S : Store VT) (H : Heap VT) (BIF : BuiltInFormula VT S H) (BIC : BuiltInCommand VT S H).
+  Module EM := ExprModel VT BIE S.
+  Module CM := CommandModel VT BIE S H BIF BIC.
+  Import VT S H EM CM.
+  Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
+  
+  Notation "a ≌ b" := (sem_eq a b) (at level 99).
+
+  Instance sem_eq_Reflexive : Reflexive sem_eq.
+  Proof.
+    unfold Reflexive, sem_eq. intros. reflexivity.
+  Qed.
+
+  Instance sem_eq_Transitive : Transitive sem_eq.
+  Proof.
+    unfold Transitive, sem_eq. intros. transitivity (reduce @ y). auto. auto.
+  Qed.
+
+  Instance sem_eq_Symmetric : Symmetric sem_eq.
+  Proof.
+    unfold Symmetric, sem_eq. intros. symmetry. auto.
+  Qed.
+
+  Program Instance seq_eq_Equivalence : Equivalence sem_eq.
+
+  Instance semEqS : Setoid command :=
+    {
+      equiv := sem_eq
+    }
+  .
+
+  Instance cSeq_Proper : Proper (sem_eq ==> sem_eq ==> sem_eq) cSeq.
+  Proof.
+    unfold Proper, respectful, sem_eq. intros. unfold reduce, _reduce. normalize. fold _reduce. rewritesr. 
+  Qed.
+
+  Definition cSeqS : semEqS ~> semEqS ~~> semEqS := injF2 cSeq _.
+
+  Instance cChoice_Proper : Proper (sem_eq ==> sem_eq ==> sem_eq) cChoice.
+  Proof.
+    unfold Proper, respectful, sem_eq. intros. unfold reduce, _reduce. normalize. fold _reduce. rewritesr. 
+  Qed.
+
+  Definition cChoiceS : semEqS ~> semEqS ~~> semEqS := injF2 cChoice _.
+
+  Instance semEq_NearSemiRing : @NearSemiRing command semEqS.
+  Proof.
+    exists (cOne) (cZero) (cSeqS) (cChoiceS).
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_left_unit.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_right_unit.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_associativity.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply plus_left_unit.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply plus_right_unit.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply plus_associativity.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_left_absorb.
+    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_left_distributivity.
+  Defined.
+
+End SemanticEquivalence.
 
 
   (*
@@ -575,7 +710,7 @@ Defined.
     * intros. unfold s's. clear s's. compute. auto.
   Qed.
 *)
-
+(*
  Definition non_inter_exprs s v val l := allTrue (fun e => EM.exprEval @ s @ e == EM.exprEval @  (s [v ↦ val ]s) @ e) l.
 
  Lemma expr_store_non_interference_2 :
@@ -766,13 +901,12 @@ Lemma form_store_non_interference_2 :
      * intros. simpl. split. reflexivity. reflexivity.
      * intros. simpl. split. reflexivity. reflexivity.
    Qed.
+*)
 
-
-End Semantics.
 
 (* example *)
 
-Module Examples (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
+(* Module Examples (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
   Module EM := ExprModel B S.
   Module SEM := Semantics B BP S H.
   Import S H EM SEM.
@@ -805,105 +939,9 @@ Module Examples (B : BuiltInExpr) (BP : BuiltInPred) (S : Store) (H : Heap).
     * rewrite update_update. reflexivity.
   Qed.
 
-  Definition sem_eq c1 c2 := forall s h, reduce c1 s h  ≍ssh reduce c2 s h.
-  Notation "a ≌ b" := (sem_eq a b) (at level 99).
-  Lemma app_nil : forall A (l : list A), l ++ nil = l.
-  Proof.
-    induction l. auto. simpl. rewrite IHl. auto.
-  Qed.
-
-  Instance sem_eq_Reflexive : Reflexive sem_eq.
-  Proof.
-    unfold Reflexive, sem_eq. intros. reflexivity.
-  Qed.
-
-  Instance sem_eq_Transitive : Transitive sem_eq.
-  Proof.
-    unfold Transitive, sem_eq. intros. transitivity (reduce y s h). auto. auto.
-  Qed.
-
-  Instance sem_eq_Symmetric : Symmetric sem_eq.
-  Proof.
-    unfold Symmetric, sem_eq. intros. symmetry. auto.
-  Qed.
-
-  Program Instance seq_eq_Equivalence : Equivalence sem_eq.
-  Instance seq_Proper : Proper (sem_eq ==> sem_eq ==> sem_eq) seq.
-  Proof.
-    unfold Proper, respectful, sem_eq. intros. simpl. simpl_let. split.
-    * rewrite H. destruct (reduce y s h). simpl.  generalize dependent t0. induction l.
-      + simpl. intros.  reflexivity.
-      + simpl. intros. simpl_let. rewrite H0. rewrite IHl. reflexivity.
-    * rewrite H. destruct (reduce y s h). simpl.  generalize dependent t0. induction l.
-      + simpl. intros.  reflexivity.
-      + simpl. intros. simpl_let. rewrite H0. rewrite IHl. reflexivity.
-  Qed.
-
-  Instance choice_Proper : Proper (sem_eq ==> sem_eq ==> sem_eq) choice.
-  Proof.
-    unfold Proper, respectful, sem_eq. intros. simpl. simpl_let. split.
-    * rewrite H. destruct (reduce y s h). simpl. rewrite H0. reflexivity.
-    * rewrite H. destruct (reduce y s h). simpl. rewrite H0. reflexivity.
-  Qed.
-
-
-    Lemma seq_associative :
-    forall c c2 c3, c ⊗c2 ⊗c3  ≌ c ⊗(c2 ⊗c3).
-  Proof.
-    unfold sem_eq. intros. simpl.    destruct (reduce c s h). simpl_let. split.
-    * generalize t0. induction l.
-      + reflexivity.
-      + intros. simpl. simpl_let. rewrite <- IHl. clear IHl. destruct (reduce c2 a t1). simpl. repeat rewrite mapM_app. simpl_let. rewrite concat_app. unfold mapM. simpl. generalize t2. induction l0.
-        - reflexivity.
-        - intros. simpl. simpl_let. rewrite <- IHl0.
-    Lemma near_semiring_0:
-    forall c, 𝟏 ⊗ c ≌ c.
-  Proof.
-    unfold sem_eq. induction c.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * simpl. intros. split. rewrite app_nil. reflexivity.  reflexivity.
-    * simpl. intros. split. rewrite app_nil. reflexivity.  reflexivity.
-    * all_cases.
-    * all_cases.
-    * simpl in *. intros.  repeat rewrite let_intro. simpl. split. rewrite app_nil. reflexivity.  reflexivity.
-    * simpl in *.   intros. repeat rewrite let_intro. simpl. split. rewrite app_nil. reflexivity. reflexivity.
-    * all_cases.
-    * all_cases.
-  Qed.
-
-  Lemma near_semiring_1:
-    forall c, c ⊗𝟏  ≌ c.
-  Proof.
-    unfold sem_eq. induction c.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * simpl.  intros. induction (lookupByObjectGeneric s h v p e).
-      + simpl. split. reflexivity.  reflexivity.
-      + simpl. repeat rewrite let_intro in *. simpl in *. destruct IHl. split. rewrite H. reflexivity. auto.
-    * simpl.  intros. induction (lookupByPredGeneric s h v p v0).
-      + simpl. split. reflexivity.  reflexivity.
-      + simpl. repeat rewrite let_intro in *. simpl in *. destruct IHl. split. rewrite H. reflexivity.    auto.
-    * all_cases.
-    * all_cases.
-    * simpl in *.  intros. repeat rewrite let_intro. simpl. split. specialize (IHc1 s h). destruct (reduce c1 s h). repeat rewrite let_intro in IHc1. simpl in IHc1. destruct IHc1. simpl. generalize dependent t0. induction l.
-      + simpl. auto.
-      + intros. simpl. specialize (IHc2 a t0). destruct (reduce c2 a t0). repeat rewrite let_intro in IHc2. simpl in IHc2. destruct IHc2. repeat rewrite let_intro. simpl. rewrite <- (IHl t1). rewrite app_nil. all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
-    * all_cases.
+  
 
 
 
 
-End Examples.
+End Examples. *)

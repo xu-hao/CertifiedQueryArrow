@@ -2,6 +2,8 @@ Require Import Utils Tactics SetoidCat.
 
 Require Import List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
+
+Program Instance natS : Setoid nat.
 Program Instance boolS : Setoid bool.
 
 

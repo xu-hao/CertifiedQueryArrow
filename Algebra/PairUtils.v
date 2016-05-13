@@ -1,4 +1,4 @@
-Require Import Utils Tactics Algebra.SetoidCat.
+Require Import Utils Tactics SetoidUtils Algebra.SetoidCat.
 
 Require Import List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
@@ -144,5 +144,14 @@ Section PairingF.
   Defined.
 
 End PairingF.
-  Notation "a *** b" := (productF @ a @ b) (at level 50, left associativity).
-  Notation "a &&& b" := (pairingF @ a @ b) (at level 50, left associativity).
+Definition  fstS {A B} {AS : Setoid A} {BS : Setoid B} : AS ~*~ BS ~> AS.
+  simple refine (injF fst _).
+Defined.
+Definition  sndS {A B} {AS : Setoid A} {BS : Setoid B} : AS ~*~ BS ~> BS.
+  simple refine (injF snd _).
+Defined.
+
+  Notation "a *** b" := (productF @ a @ b) (at level 40, left associativity).
+  Notation "a &&& b" := (pairingF @ a @ b) (at level 40, left associativity).
+
+    Definition pairS {A B} {AS : Setoid A} {BS : Setoid B} : AS ~>  BS ~~> AS ~*~ BS := curryS @ idS.

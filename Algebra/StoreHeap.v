@@ -1,4 +1,4 @@
-Require Import  Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid  Algebra.Alternative Algebra.MonoidUtils Algebra.NearSemiRing Algebra.Store Algebra.ContT Algebra.Alternative Algebra.Functor Algebra.Applicative PairUtils SetoidUtils Tactics.
+Require Import  Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid  Algebra.Alternative Algebra.MonoidUtils Algebra.NearSemiRing  Algebra.ContT Algebra.Alternative Algebra.Functor Algebra.Applicative PairUtils SetoidUtils Tactics.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
@@ -99,7 +99,9 @@ Section StoreHeap.
     Qed.
     apply putStore_1.
   Defined.
-
+  
+  Definition updateStore {B} {BS : Setoid B} : (SR ~~> SR) ~> shS BS unitS := (bind @ getStore) ∘ (flipS @ compS @ putStore).  
+             
   Definition putHeap  {B} {BS : Setoid B} : SH ~> shS BS unitS.
     simple refine (injF4 (fun (h : H) (c : unitS ~> storeHeapS BS) (_ : H) (s : R)  => c @ tt @ h @ s) _).
     Lemma putHeap_1 : forall {B} {BS : Setoid B}, Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv)
@@ -111,91 +113,39 @@ Section StoreHeap.
     apply putHeap_1.
   Defined.
 
+  Definition updateHeap {B} {BS : Setoid B} : (SH ~~> SH) ~> shS BS unitS := (bind @ getHeap) ∘ (flipS @ compS @ putHeap).  
 
   Existing Instance arr_Monoid.
   Existing Instance contT_A_Monoid.
 
-  Definition sh_times{A B C S : Type}
-    {AS : Setoid A}
-    {BS : Setoid B}
-    {CS : Setoid C}
-    {SS : Setoid S} : (AS ~~> shS SS BS) ~> (BS ~~> shS SS CS) ~~> (AS ~~> shS SS CS) := compM.
+  Section Sh_SS_unitS_NearSemiRing.
+    Definition sh_times {S : Type} {SS : Setoid S} : shS SS unitS ~> shS SS unitS ~~> shS SS unitS := andThen.
 
-  Definition sh_plus {A B  S : Type}
-    {AS : Setoid A}
-    {BS : Setoid B}
-    {SS : Setoid S}: (AS ~~> shS SS BS) ~> (AS ~~> shS SS BS) ~~> (AS ~~> shS SS BS) := mappend.
+    Definition sh_plus {S : Type} {SS : Setoid S} : shS SS unitS ~> shS SS unitS ~~> shS SS unitS := mappend.
 
-  Definition sh_zero {A B  S : Type}
-    {AS : Setoid A}
-    {BS : Setoid B}
-    {SS : Setoid S}: AS ~> shS SS BS := mempty.
+    Definition sh_zero {S : Type} {SS : Setoid S} : sh SS unit := mempty.
 
-  Definition sh_one {A  S : Type}
-    {AS : Setoid A}
-    {SS : Setoid S}: AS ~> shS SS AS := ret.
+    Definition sh_one {S : Type} {SS : Setoid S}: sh SS unit := ret @ tt.
 
-  Context
-    {A B C D S : Type}
-    {AS : Setoid A}
-    {BS : Setoid B}
-    {CS : Setoid C}
-    {DS : Setoid D}
-    {SS : Setoid S}.
-
-  (* category laws *)
-  Lemma times_left_unit : forall a : AS ~> shS SS BS, sh_times @ sh_one @ a == a.
+    
+  Instance sh_NearSemiRing {S : Type} {SS : Setoid S} : @NearSemiRing _ (shS SS unitS).
   Proof.
+    exists (sh_one) (sh_zero) (sh_times) (sh_plus).
     intros. simpl. arrequiv.    
-  Qed.
-  
-  Lemma times_right_unit : forall a : AS ~> shS SS BS, sh_times @ a @ sh_one == a.
-  Proof.
-    intros. unfold sh_times, sh_one. apply (@right_unit_comp (@sh S SS)).
-  Qed.
-  
-  Lemma times_associativity : forall (a : AS ~> shS SS BS)  (b : BS ~> shS SS CS)  (c : CS ~> shS SS DS), sh_times @ (sh_times @ a @ b) @ c == sh_times @ a @ (sh_times @ b @ c).
-
-  Proof.
-    intros. apply (@associativity_comp (@sh S SS)).
-  Qed.
-
-  (* monoid-enriched category *)
-  Lemma plus_left_unit : forall a : AS ~> shS SS BS, sh_plus @ sh_zero @ a == a.
-  Proof.
+    intros. unfold sh_times, sh_one. unfold andThen. normalizecomp. unfold constS. normalize. apply (@right_unit_equiv (sh SS) (@shS _ SS) sh_Monad). simpl. arrequiv. destruct a0. reflexivity.
+    intros. unfold sh_times. unfold andThen. normalizecomp. rewrite (@associativity (@sh S SS) (@shS _ SS) sh_Monad _ _ _ _ _ _ a (constS unitS @ b) (constS unitS @ c)). evalproper. simpl_equiv. reflexivity.
     intros. apply left_unit_monoid.
-  Qed.
-
-  Lemma plus_right_unit : forall a : AS ~> shS SS BS, sh_plus @ a @ sh_zero == a.
-  Proof.
     intros. apply right_unit_monoid.
-  Qed.
-
-  Lemma plus_associativity : forall (a b c: AS ~> shS SS BS), sh_plus @ (sh_plus @ a @ b) @ c == sh_plus @ a @ (sh_plus @ b @ c).
-  Proof.
     intros. apply associativity_monoid.
-  Qed.
-
-  Lemma times_left_absorb :  forall a : AS ~> shS SS BS, sh_times @ sh_zero @ a == sh_zero.
-  Proof.
     intros. simpl. arrequiv.
-  Qed.
-Set Printing Implicit.
-  Lemma times_left_distributivity : forall (a b: AS ~> shS SS BS)  (c : BS ~> shS SS CS) , sh_times @ (sh_plus @ a @ b) @ c == sh_plus @ (sh_times @ a @ c) @ (sh_times @ b @ c).
-  Proof.
-    intros. unfold sh_times at 1. unfold sh_plus at 1. unfold compM, _compM. normalize. simpl_equiv. simpl mappend.  unfold arr_mappend. unfold comp3S, uncurryS, pairingF. normalize.  unfold fst, snd. rewrite (contT_left_distributivity SS (@storeHeapS) B C BS CS (a @ a0) (b @ a0) c).  reflexivity.
-  Qed.
+    intros. unfold sh_times at 1. unfold sh_plus at 1.  unfold andThen. normalizecomp. rewrite (@contT_left_distributivity _ _ _ _ _ _ _ _ _ a b (constS _ @ c)). reflexivity.
+    Grab Existential Variables.
+    solve_proper.
+  Defined.
   
-
+End Sh_SS_unitS_NearSemiRing.
   (* Proof. *)
 
-(*
-  Instance sh_NearSemiRing : @NearSemiRing _ (SS ~~> shS SS).
-  Proof.
-    exists (@sh_one) (@sh_zero) (@sh_times) (@sh_plus).
-  Defined.
-
-*)
   
   (* Proof. *)
 

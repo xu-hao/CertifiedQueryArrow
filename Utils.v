@@ -93,7 +93,61 @@ Section ListDoubleInductionPrinciple.
       end
     .
   End ListDoubleInductionPrinciple.
-  Section ListTripleInductionPrinciple.
+Section ListDoubleInductionPrinciple'.
+    Variable
+      (T T' : Type)
+      (P : list T -> list T' -> Prop)
+      (nilnil : P List.nil List.nil)
+      (nilcons : forall a b, P List.nil b -> P List.nil (a :: b))
+      (consnil : forall a b, P b List.nil -> P (a :: b) List.nil)
+      (conscons : forall a b c d, P b d -> P (a :: b) (c :: d)).
+    
+    Fixpoint list_ind_2'
+             (l1 : list T)(l2 : list T') : P l1 l2 :=
+      match l1 in list _ return P l1 l2 with
+        | List.nil =>
+          (fix h (l2' : list T') : P List.nil l2' :=
+                 match l2' with
+                   | List.nil => nilnil
+                   | a :: b => nilcons a b (h b)
+                 end) l2
+        | a :: b =>
+          (fix h (l2' : list T') : P (a :: b) l2' :=
+             match l2' in list _ return P (a :: b) l2' with
+               | List.nil => consnil a b (list_ind_2' b List.nil)
+               | c :: d => conscons a b c d (list_ind_2' b d)
+             end) l2
+      end
+    .
+End ListDoubleInductionPrinciple'.
+Section ListDoubleRecursionPrinciple.
+    Variable
+      (T T' : Type)
+      (P : list T -> list T' -> Type)
+      (nilnil : P List.nil List.nil)
+      (nilcons : forall a b, P List.nil b -> P List.nil (a :: b))
+      (consnil : forall a b, P b List.nil -> P (a :: b) List.nil)
+      (conscons : forall a b c d, P b d -> P (a :: b) (c :: d)).
+    
+    Fixpoint list_rect_2
+             (l1 : list T)(l2 : list T') : P l1 l2 :=
+      match l1 in list _ return P l1 l2 with
+        | List.nil =>
+          (fix h (l2' : list T') : P List.nil l2' :=
+                 match l2' with
+                   | List.nil => nilnil
+                   | a :: b => nilcons a b (h b)
+                 end) l2
+        | a :: b =>
+          (fix h (l2' : list T') : P (a :: b) l2' :=
+             match l2' in list _ return P (a :: b) l2' with
+               | List.nil => consnil a b (list_rect_2 b List.nil)
+               | c :: d => conscons a b c d (list_rect_2 b d)
+             end) l2
+      end
+    .
+End ListDoubleRecursionPrinciple.
+Section ListTripleInductionPrinciple.
     Variable
       (T : Type)
       (P : list T -> list T -> list T -> Prop)
@@ -144,6 +198,156 @@ Section ListDoubleInductionPrinciple.
       end
     .
   End ListTripleInductionPrinciple.
+Section ListTripleInductionPrinciple'.
+    Variable
+      (S T U: Type)
+      (P : list S -> list T -> list U -> Prop)
+      (nilnilnil : P List.nil List.nil List.nil)
+      (nilnilcons : forall a b, P List.nil List.nil b -> P List.nil List.nil (a :: b))
+      (nilconsnil : forall a b, P List.nil b List.nil -> P List.nil (a :: b) List.nil)
+      (nilconscons : forall a b c d, P List.nil b d -> P List.nil (a :: b) (c :: d))
+      (consnilnil : forall a b, P b List.nil List.nil -> P (a :: b) List.nil List.nil)
+      (consnilcons : forall a b c d, P b List.nil d -> P (a::b) List.nil (c :: d))
+      (consconsnil : forall a b c d, P b d List.nil -> P (a :: b) (c::d) List.nil)
+      (consconscons : forall a b c d e f, P b d f -> P (a :: b) (c :: d) (e::f)).
+    
+    Fixpoint list_ind_3'
+             (l1 : list S )(l2  : list T) (l3 :list U) : P l1 l2 l3 :=
+      match l1 in list _ return P l1 l2 l3 with
+        | List.nil =>
+          (fix h (l2'  : list T)(l3' :list U) : P List.nil l2' l3' :=
+                 match l2' with
+                   | List.nil =>
+                     (fix h' (l3'' : list U) : P List.nil List.nil l3'' :=
+                        match l3'' with
+                          | List.nil => nilnilnil
+                          | a :: b => nilnilcons a b (h' b)
+                        end) l3'
+                   | a :: b =>
+                     (fix h' (l3'' : list U) : P List.nil (a :: b) l3'' :=
+                        match l3'' with
+                          | List.nil => nilconsnil a b (h b List.nil)
+                          | c :: d => nilconscons a b c d (h b d)
+                        end) l3'
+                 end) l2 l3
+        | a :: b =>
+          (fix h (l2' : list T)(l3' : list U) : P (a :: b) l2' l3' :=
+             match l2' in list _ return P (a :: b) l2' l3' with
+               | List.nil =>
+                 (fix h' (l3'' : list U) : P (a :: b) List.nil l3'' :=
+                    match l3'' with
+                      | List.nil => consnilnil a b (list_ind_3' b List.nil List.nil)
+                      | c :: d => consnilcons a b c d (list_ind_3' b List.nil d)
+                    end) l3'
+               | c :: d =>
+                 (fix h' (l3'' : list U) : P (a :: b) (c :: d) l3'' :=
+                    match l3'' with
+                      | List.nil => consconsnil a b c d (list_ind_3' b d List.nil)
+                      | e :: f => consconscons a b c d e f (list_ind_3' b d f)
+                    end) l3'
+             end) l2 l3
+      end
+    .
+  End ListTripleInductionPrinciple'.
+Section ListQuadrupleInductionPrinciple.
+    Variable
+      (T : Type)
+      (P : list T -> list T -> list T -> list T -> Prop)
+      (nilnilnilnil : P List.nil List.nil List.nil nil)
+      (nilnilnilcons : forall a b, P List.nil List.nil nil b -> P List.nil List.nil nil (a :: b))
+      (nilnilconsnil : forall a b, P List.nil nil b List.nil -> P List.nil nil (a :: b) List.nil)
+      (nilnilconscons : forall a b c d, P nil List.nil b d -> P nil List.nil (a :: b) (c :: d))
+      (nilconsnilnil : forall a b, P nil b List.nil List.nil -> P nil (a :: b) List.nil List.nil)
+      (nilconsnilcons : forall a b c d, P nil b List.nil d -> P nil (a::b) List.nil (c :: d))
+      (nilconsconsnil : forall a b c d, P nil b d List.nil -> P nil (a :: b) (c::d) List.nil)
+      (nilconsconscons : forall a b c d e f, P nil b d f -> P nil (a :: b) (c :: d) (e::f))
+      (consnilnilnil : forall y z, P z nil nil nil -> P (y :: z) List.nil List.nil List.nil)
+      (consnilnilcons : forall y z a b, P z List.nil List.nil b -> P (y :: z) List.nil List.nil (a :: b))
+      (consnilconsnil : forall y z a b, P z List.nil b List.nil -> P (y :: z) List.nil (a :: b) List.nil)
+      (consnilconscons : forall y z a b c d, P z List.nil b d -> P (y :: z) List.nil (a :: b) (c :: d))
+      (consconsnilnil : forall y z a b, P z b List.nil List.nil -> P (y :: z) (a :: b) List.nil List.nil)
+      (consconsnilcons : forall y z a b c d, P z b List.nil d -> P (y :: z) (a::b) List.nil (c :: d))
+      (consconsconsnil : forall y z a b c d, P z b d List.nil -> P (y :: z) (a :: b) (c::d) List.nil)
+      (consconsconscons : forall y z a b c d e f, P z b d f -> P (y :: z) (a :: b) (c :: d) (e::f)).
+    
+    Fixpoint list_ind_4
+             (l1 l2 l3 l4 : list T) : P l1 l2 l3 l4 :=
+      match l1 in list _ return P l1 l2 l3 l4 with
+        | List.nil =>
+          (fix h (l2' l3' l4' : list T) : P List.nil l2' l3' l4' :=
+                 match l2' with
+                   | List.nil =>
+                     (fix h' (l3'' l4'' : list T) : P List.nil List.nil l3'' l4'' :=
+                        match l3'' with
+                          | List.nil =>
+                            (fix h'' (l4''' : list T) : P List.nil List.nil nil l4''' :=
+                               match l4''' with
+                                 | List.nil => nilnilnilnil
+                                 | a :: b => nilnilnilcons a b (h'' b)
+                               end) l4''
+                          | a :: b =>
+                            (fix h'' (l4''' : list T) : P List.nil List.nil (a::b) l4''' :=
+                               match l4''' with
+                                 | List.nil => nilnilconsnil a b (h' b nil)
+                                 | c :: d => nilnilconscons a b c d (h' b d)
+                               end) l4''
+                        end) l3' l4'
+                   | a :: b =>
+                     (fix h' (l3'' l4'' : list T) : P List.nil (a :: b) l3'' l4'' :=
+                        match l3'' with
+                          | List.nil =>
+                            (fix h'' (l4''' : list T) : P List.nil (a :: b) nil l4''' :=
+                               match l4''' with
+                                 | List.nil => nilconsnilnil a b (h b nil nil)
+                                 | c :: d => nilconsnilcons a b c d (h b nil d)
+                               end) l4''
+                          | c :: d =>
+                            (fix h'' (l4''' : list T) : P List.nil (a :: b) (c :: d) l4''' :=
+                               match l4''' with
+                                 | List.nil => nilconsconsnil a b c d (h b d nil)
+                                 | e :: f => nilconsconscons a b c d e f (h b d f)
+                               end) l4''
+                        end) l3' l4'
+                 end) l2 l3 l4
+        | a :: b =>
+          (fix h (l2' l3' l4' : list T) : P (a :: b) l2' l3' l4' :=
+             match l2' in list _ return P (a :: b) l2' l3' l4' with
+               | List.nil =>
+                 (fix h' (l3'' l4'' : list T) : P (a :: b) List.nil l3'' l4'' :=
+                    match l3'' with
+                      | List.nil =>
+                        (fix h'' (l4''' : list T) : P (a:: b) nil nil l4''' :=
+                           match l4''' with
+                             | List.nil => consnilnilnil a b (list_ind_4 b List.nil nil nil)
+                             | c :: d => consnilnilcons a b c d (list_ind_4 b nil nil d)
+                           end) l4''
+                      | c :: d =>
+                        (fix h'' (l4''' : list T) : P (a:: b) nil (c::d) l4''' :=
+                           match l4''' with
+                             | List.nil => consnilconsnil a b c d (list_ind_4 b nil d nil)
+                             | e :: f => consnilconscons a b c d e f (list_ind_4 b nil d f)
+                           end) l4''
+                    end) l3' l4'
+               | c :: d =>
+                 (fix h' (l3'' l4'' : list T) : P (a :: b) (c :: d) l3'' l4'' :=
+                    match l3'' with
+                      | List.nil =>
+                        (fix h'' (l4''' : list T) : P (a:: b) (c::d) nil l4''' :=
+                           match l4''' with
+                             | List.nil => consconsnilnil a b c d (list_ind_4 b d List.nil nil)
+                             | e :: f => consconsnilcons a b c d e f (list_ind_4 b d List.nil f)
+                           end) l4''
+                      | e :: f =>
+                        (fix h'' (l4''' : list T) : P (a:: b) (c::d) (e::f) l4''' :=
+                           match l4''' with
+                             | List.nil => consconsconsnil a b c d e f (list_ind_4 b d f nil)
+                             | y :: z => consconsconscons a b c d e f y z (list_ind_4 b d f z)
+                           end) l4''
+                    end) l3' l4'
+             end) l2 l3 l4
+      end
+    .
+  End ListQuadrupleInductionPrinciple.
 
  (* Definition subsetR {A} (ra : relation A) P : relation {a : A | P a} :=
   fun a a2 => ra (proj1_sig a) (proj1_sig a2).

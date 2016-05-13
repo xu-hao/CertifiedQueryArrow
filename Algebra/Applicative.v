@@ -1,4 +1,4 @@
-Require Import SetoidCat SetoidUtils Functor PairUtils Utils.
+Require Import SetoidCat SetoidUtils Functor Monoid PairUtils Utils.
 
 Require Import SetoidClass.
 
@@ -8,12 +8,6 @@ Section Applicative.
     {t : forall A, Setoid A -> Type}
     {tS : forall A (AS : Setoid A), Setoid (t A AS)}
     {func : @Functor t tS}.
-
-   
-  Definition evalS {A B} {AS : Setoid A} {BS : Setoid B} := injF2  (@eval _ _ AS BS) _.
-
-  Definition fstS {A B} {AS : Setoid A} {BS : Setoid B} : (AS ~*~ BS) ~> AS := injF  fst _.
-  Definition sndS {A B} {AS : Setoid A} {BS : Setoid B} : (AS ~*~ BS) ~> BS := injF  snd _.
 
   Definition left_unitor {A} {AS : Setoid A} : unitS ~*~ AS ~> AS := sndS.
 
@@ -125,6 +119,34 @@ Section ComposeApplicative.
   
 
 End ComposeApplicative.
+
+Section ConstApplicative.
+  Context
+    {C}
+    {CS : Setoid C}
+    {mon : @Monoid C CS}.
+
+  Definition constFunc_unitA := ConstIsoS CS unitS @ mempty.
+  Definition constFunc_prod {A B} {AS : Setoid A} {BS : Setoid B} : ConstS CS AS ~> ConstS CS BS ~~> ConstS CS (AS ~*~ BS) :=
+    flipS @ compS @ ConstIsoS CS (AS ~*~ BS)
+          ∘ compS @ ConstIsoS' CS BS
+          ∘ mappend ∘ ConstIsoS' CS AS.
+
+  Existing Instance ConstFunctor.
+  Existing Instance ConstS.
+
+  Instance Const_Applicative : @Applicative (ConstFunc C) _ _.
+  
+  Proof.
+
+    exists (@constFunc_unitA) (@constFunc_prod).
+    
+    intros. simpl. destruct a. rewrite left_unit_monoid. reflexivity.
+    intros. simpl. destruct a. rewrite right_unit_monoid. reflexivity. 
+    intros. simpl. rewrite associativity_monoid. reflexivity. 
+    intros. simpl. reflexivity. 
+  Defined.
+End ConstApplicative.
 
 Section Utils.
   Context

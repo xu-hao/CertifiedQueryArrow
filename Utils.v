@@ -388,4 +388,130 @@ Program Instance funcSetoid A B (SA : Setoid A) (SB : Setoid B) : Setoid (A -> B
 
 
 
-  
+  Section NatListDoubleInductionPrinciple.
+    Variable
+      (T : Type)
+      (P : nat ->  list T  -> Prop)
+      (onil : P 0   nil)
+      (ocons : forall a b, P 0 b -> P 0 (a :: b))
+      (snil : forall b, P b List.nil -> P (S b) List.nil)
+      (scons : forall b c d, P b d -> P (S b) (c :: d)).
+    
+    Fixpoint nat_list_ind_2
+             (l1 : nat) ( l2 : list T) : P l1 l2 :=
+      match l1 in nat return P l1 l2 with
+        | 0 =>
+          (fix h' (l2' : list T) : P 0 l2' :=
+             match l2' with
+               | List.nil => onil
+               | a :: b => ocons a b (h' b)
+             end) l2
+        | S b =>
+          (fix h' (l2' : list T) : P (S b) l2' :=
+             match l2' with
+               | List.nil => snil b (nat_list_ind_2 b nil)
+               | c :: d => scons b c d (nat_list_ind_2 b d)
+             end) l2
+      end
+    .
+End NatListDoubleInductionPrinciple.
+
+Section NatListQuadrupleInductionPrinciple.
+    Variable
+      (T : Type)
+      (P : nat -> nat -> list T -> list T -> Prop)
+      (oonilnil : P 0 0 List.nil nil)
+      (oonilcons : forall a b, P 0 0 nil b -> P 0 0 nil (a :: b))
+      (ooconsnil : forall a b, P 0 0 b List.nil -> P 0 0 (a :: b) List.nil)
+      (ooconscons : forall a b c d, P 0 0 b d -> P 0 0 (a :: b) (c :: d))
+      (osnilnil : forall b, P 0 b List.nil List.nil -> P 0 (S b) List.nil List.nil)
+      (osnilcons : forall b c d, P 0 b List.nil d -> P 0 (S b) List.nil (c :: d))
+      (osconsnil : forall b c d, P 0 b d List.nil -> P 0 (S b) (c::d) List.nil)
+      (osconscons : forall b c d e f, P 0 b d f -> P 0 (S b) (c :: d) (e::f))
+      (sonilnil : forall z, P z 0 nil nil -> P (S z) 0 List.nil List.nil)
+      (sonilcons : forall z a b, P z 0 List.nil b -> P (S z) 0 List.nil (a :: b))
+      (soconsnil : forall z a b, P z 0 b List.nil -> P (S z) 0 (a :: b) List.nil)
+      (soconscons : forall z a b c d, P z 0 b d -> P (S z) 0 (a :: b) (c :: d))
+      (ssnilnil : forall z b, P z b List.nil List.nil -> P (S z) (S b) List.nil List.nil)
+      (ssnilcons : forall z b c d, P z b List.nil d -> P (S z) (S b) List.nil (c :: d))
+      (ssconsnil : forall z b c d, P z b d List.nil -> P (S z) (S b) (c::d) List.nil)
+      (ssconscons : forall z b c d e f, P z b d f -> P (S z) (S b) (c :: d) (e::f)).
+    
+    Fixpoint nat_list_ind_4
+             (l1 l2 : nat) ( l3 l4 : list T) : P l1 l2 l3 l4 :=
+      match l1 in nat return P l1 l2 l3 l4 with
+        | 0 =>
+          (fix h (l2' : nat) ( l3' l4' : list T) : P 0 l2' l3' l4' :=
+                 match l2' with
+                   | 0 =>
+                     (fix h' (l3'' l4'' : list T) : P 0 0 l3'' l4'' :=
+                        match l3'' with
+                          | List.nil =>
+                            (fix h'' (l4''' : list T) : P 0 0 nil l4''' :=
+                               match l4''' with
+                                 | List.nil => oonilnil
+                                 | a :: b => oonilcons a b (h'' b)
+                               end) l4''
+                          | a :: b =>
+                            (fix h'' (l4''' : list T) : P 0 0 (a::b) l4''' :=
+                               match l4''' with
+                                 | List.nil => ooconsnil a b (h' b nil)
+                                 | c :: d => ooconscons a b c d (h' b d)
+                               end) l4''
+                        end) l3' l4'
+                   | S b =>
+                     (fix h' (l3'' l4'' : list T) : P 0 (S b) l3'' l4'' :=
+                        match l3'' with
+                          | List.nil =>
+                            (fix h'' (l4''' : list T) : P 0 (S b) nil l4''' :=
+                               match l4''' with
+                                 | List.nil => osnilnil b (h b nil nil)
+                                 | c :: d => osnilcons b c d (h b nil d)
+                               end) l4''
+                          | c :: d =>
+                            (fix h'' (l4''' : list T) : P 0 (S b) (c :: d) l4''' :=
+                               match l4''' with
+                                 | List.nil => osconsnil b c d (h b d nil)
+                                 | e :: f => osconscons b c d e f (h b d f)
+                               end) l4''
+                        end) l3' l4'
+                 end) l2 l3 l4
+        | S b =>
+          (fix h (l2' : nat) ( l3' l4' : list T) : P (S b) l2' l3' l4' :=
+             match l2' in nat return P (S b) l2' l3' l4' with
+               | 0 =>
+                 (fix h' (l3'' l4'' : list T) : P (S b) 0 l3'' l4'' :=
+                    match l3'' with
+                      | List.nil =>
+                        (fix h'' (l4''' : list T) : P (S b) 0 nil l4''' :=
+                           match l4''' with
+                             | List.nil => sonilnil b (nat_list_ind_4 b 0 nil nil)
+                             | c :: d => sonilcons b c d (nat_list_ind_4 b 0 nil d)
+                           end) l4''
+                      | c :: d =>
+                        (fix h'' (l4''' : list T) : P (S b) 0 (c::d) l4''' :=
+                           match l4''' with
+                             | List.nil => soconsnil b c d (nat_list_ind_4 b 0 d nil)
+                             | e :: f => soconscons b c d e f (nat_list_ind_4 b 0 d f)
+                           end) l4''
+                    end) l3' l4'
+               | S d =>
+                 (fix h' (l3'' l4'' : list T) : P (S b) (S d) l3'' l4'' :=
+                    match l3'' with
+                      | List.nil =>
+                        (fix h'' (l4''' : list T) : P (S b) (S d) nil l4''' :=
+                           match l4''' with
+                             | List.nil => ssnilnil b d (nat_list_ind_4 b d List.nil nil)
+                             | e :: f => ssnilcons b d e f (nat_list_ind_4 b d List.nil f)
+                           end) l4''
+                      | e :: f =>
+                        (fix h'' (l4''' : list T) : P (S b) (S d) (e::f) l4''' :=
+                           match l4''' with
+                             | List.nil => ssconsnil b d e f (nat_list_ind_4 b d f nil)
+                             | y :: z => ssconscons b d e f y z (nat_list_ind_4 b d f z)
+                           end) l4''
+                    end) l3' l4'
+             end) l2 l3 l4
+      end
+    .
+End NatListQuadrupleInductionPrinciple.

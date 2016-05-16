@@ -18,6 +18,8 @@ Algebra/Maybe.v
 Algebra/ContT.v
 Algebra/StoreHeap.v
 Algebra/Pointed.v
+Algebra/Lens/Lista.v
+Algebra/Lens/Matrixp.v
 Algebra/Lens/LensTypes.v
 Algebra/Lens/Lens.v
 Algebra/Lens/ListLens.v

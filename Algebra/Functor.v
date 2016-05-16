@@ -196,6 +196,32 @@ Section ConstFunctor.
     intros. simpl. arrequiv. destruct a. simpl. reflexivity.
   Defined.
 
+  Lemma ConstIso_iso : forall A B (AS : Setoid A) (BS : Setoid B) (a : B),
+            match ConstIsoS BS AS @ a with
+              | ConstIso _ _ a' => a'
+            end = a.
+  Proof.
+    auto.
+  Qed.
+
+  Lemma ConstIsoS_iso : forall A B (AS : Setoid A) (BS : Setoid B) (a : B),
+            ConstIsoS' _ _ @ (ConstIsoS BS AS @ a) = a.
+  Proof.
+    auto.
+  Qed.
+
+  Lemma ConstIso'_iso : forall A B (AS : Setoid A) (BS : Setoid B) a,
+                          ConstIso B A (ConstIso' B A a) = a.
+  Proof.
+    intros. destruct a. auto. 
+  Qed.
+
+  Lemma ConstIsoS'_iso : forall A B (AS : Setoid A) (BS : Setoid B) a,
+                          ConstIsoS BS AS @ (ConstIsoS' BS AS @ a) = a.
+  Proof.
+    intros. destruct a. auto. 
+  Qed.
+
 End ConstFunctor.
 
 Notation "a <$> b" := (fmap  @ a @ b) (at level 49, left associativity).

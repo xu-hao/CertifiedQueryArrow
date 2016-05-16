@@ -1,4 +1,4 @@
-Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed.
+Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed Lista Matrixp.
 Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics Coq.Arith.Compare_dec.
 
 Existing Instance maybe_Monad.
@@ -84,7 +84,9 @@ Definition unionRows : listaS (maybeS rowS) ~> listaS (maybeS rowS) ~~> listaS (
 
 Definition minS := injF2 min _.
 
-Definition _unionTables (tab1 tab2 : matrixp nat) : matrixp nat :=
+Existing Instance sqlVal_Pointed.
+
+Definition _unionTables (tab1 tab2 : matrixp sqlVal) : matrixp sqlVal :=
   matrixpConsS @ (minS @ (tableWidthGetter @ tab1) @ (tableWidthGetter @ tab2)) @ (unionRows @ (tableRowsGetter @ tab1) @ (tableRowsGetter @ tab2)).
 
 Instance _unionTables_Proper : Proper (equiv ==> equiv ==> equiv) _unionTables.
@@ -151,19 +153,35 @@ Fixpoint duplicate {A} (n : nat) (a : A) : list A :=
     | S n => a :: duplicate n a
   end.
 
-Definition extractNat  (val1 : sqlVal)  : maybe nat :=
+Definition caseSqlVal {A} {AS : Setoid A} (nat1 : natS ~> AS) (addr1 : natS ~*~ natS ~> AS) (row1 : listS sqlValS ~> AS) val1 : A :=
   match val1 with
-    | vNat n => Some n
-    | _ => None
-  end.
-  
-Instance extractNat_Proper : Proper (equiv ==> equiv) extractNat.
-Proof.
-  autounfold. intros. unfold extractNat.  matchequiv.  inversion H. rewritesr. inversion H. inversion H. 
-Qed.
-  
-Definition extractNatS : sqlValS ~> maybeS natS := injF extractNat _.
+    | vNat n => nat1 @ n
+    | vAddr a => addr1 @ a
+    | vRow l => row1 @ l
+  end
+.
 
+Instance caseSqlVal_Proper A AS : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv) (@caseSqlVal A AS).
+Proof.
+  autounfold. intros. unfold caseSqlVal. simpl in H2. rewrite H2. destruct y2. 
+  rewritesr.
+  rewritesr. 
+  rewritesr.
+Qed.
+
+Definition caseSqlValS {A AS} := injF4 (@caseSqlVal A AS) _.
+
+Definition extractAddrS : sqlValS ~> maybeS (natS ~*~ natS) :=
+  caseSqlValS
+    @ (constS _ @ None)
+    @ (SomeS)
+    @ (constS _ @ None).
+
+Definition extractNatS : sqlValS ~> maybeS natS :=
+  caseSqlValS
+    @ (SomeS)
+    @ (constS _ @ None)
+    @ (constS _ @ None).
 
 Instance vNat_Proper : Proper (equiv ==> equiv) vNat.
 Proof.
@@ -172,50 +190,92 @@ Qed.
 
 Definition vNatS : natS ~> sqlValS := injF vNat _.
 
-Instance pair_Proper A B (AS : Setoid A) (BS : Setoid B): Proper (equiv ==> equiv ==> equiv) (@pair A B).
+Instance vAddr_Proper : Proper (equiv ==> equiv) vAddr.
 Proof.
-  autounfold. intros. split. auto. auto.
+  autounfold. intros. destruct x,y. simpl in *. f_equal. f_equal. tauto.  tauto. 
 Qed.
 
+Definition vAddrS : sqlAddrS ~> sqlValS := injF vAddr _.
 
-Lemma maybe_row_eq_dec : forall r1 r2 : maybe row, {r1 == r2} + {~r1 == r2}.
-  intros.  destruct r1, r2.
-  - destruct r, r0. destruct (Nat.eq_dec n n0).
-    + apply list_rect_2 with (l1:=l) (l2:=l0).
+Existing Instance pair_Proper.
+
+Existing Instance listaCons_Proper.
+
+Lemma lista_equiv_dec : forall {A} {AS :Setoid A} (r1 r2 : lista A) (equiv_dec : forall a1 a2 : A, {a1 == a2} + {~a1 == a2}),  {r1 == r2} + {~r1 == r2}.
+Proof.
+  intros. destruct r1 as [s l], r2 as [s0 l0].
+  destruct (equiv_dec s s0).
+  
+  - apply list_rect_2 with (l1:=l) (l2:=l0).
       * left. rewrite e. reflexivity.
       * intros. destruct H.
-        destruct e0. destruct (Nat.eq_dec a n).
-        rewrite <- e, e0. left. simpl. auto.
+        destruct e0. destruct (equiv_dec a s).
+        left. rewrite <- e, e0. simpl. split; [reflexivity | split; [reflexivity | auto]].
         right. simpl. tauto.
         right. simpl in *. tauto.
       * intros. destruct H.
-        destruct (Nat.eq_dec a n0).
-        rewrite e, e1. left. rewrite e in e0. simpl. auto.
+        destruct (equiv_dec a s0).
+        left. rewrite e, e1. rewrite e in e0. simpl. split; [reflexivity | auto].
         right. simpl. tauto.
         right. simpl in *. tauto.
       * intros. destruct H.
-        destruct (Nat.eq_dec a c).
-        rewrite <- e, e1. left. simpl in *. rewrite <- e in e0. auto.
+        destruct (equiv_dec a c).
+        simpl in e, e1.
+        left. rewrite <- e, e1. rewrite <- e in e0.  simpl in *. split; [reflexivity | auto].
         right. simpl. tauto.
         right. simpl in *. tauto.
-    + right. intro. apply n1. assert (n == n0). apply listaCons_equiv with (l1:=l)(l2:=l0). auto. auto.
+  - right. intro. apply n. apply listaCons_equiv with (l1:=l)(l2:=l0). auto.
+Qed.
+
+Lemma maybe_equiv_dec : forall {A} {AS :Setoid A} (r1 r2 : maybe A) (equiv_dec : forall a1 a2 : A, {a1 == a2} + {~a1 == a2}), {r1 == r2} + {~r1 == r2}.
+Proof.
+  intros.  destruct r1 as [n|], r2 as [n0 |].
+  - destruct (equiv_dec n n0).
+    + left. auto.
+    + right. auto. 
   - right. intro. inversion H.
   - right. intro. inversion H.
   - left. reflexivity.
 Qed.
 
-  Lemma nat_int : forall n n' , n < S n' -> ~ n' < n.
-  Proof.
-    double induction n n'.
-    intros. intro. inversion H0.
-    intros. intro. inversion H0. inversion H1.
-    intros. intro. inversion H0. inversion H3.
-    intros. intro. apply H0 with (n':=n0). apply le_S_n. auto. apply le_S_n. auto.
-  Qed.
+Lemma row_equiv_dec : forall (r1 r2 : row) ,  {r1 == r2} + {~r1 == r2}.
+Proof.
+  intros. apply lista_equiv_dec.  apply SQLValType.equiv_dec.
+Qed.
 
-  Open Scope nat_scope.
-  Lemma plus_symmetry : forall a b, a+b = b+a.
+Lemma maybe_row_equiv_dec : forall r1 r2 : maybe row, {r1 == r2} + {~r1 == r2}.
+Proof.
+  intros. apply maybe_equiv_dec. apply row_equiv_dec. 
+Qed.
+
+Lemma nat_int : forall n n' , n < S n' -> ~ n' < n.
+Proof.
+  double induction n n'.
+  intros. intro. inversion H0.
+  intros. intro. inversion H0. inversion H1.
+  intros. intro. inversion H0. inversion H3.
+  intros. intro. apply H0 with (n':=n0). apply le_S_n. auto. apply le_S_n. auto.
+Qed.
+
+Open Scope nat_scope.
+Lemma plus_symmetry : forall a b, a+b = b+a.
+Proof.
+  induction a. intros. simpl. apply plus_n_O.
+  intros. simpl. rewrite <- plus_n_Sm. f_equal. apply IHa.
+Qed.
+
+Definition ltS : natS ~> natS ~~> iff_setoid := injF2 lt _.
+
+  Definition ltMaybe a b :=
+    caseMaybeS
+      @ (ltS @ a) 
+      @ False
+      @ b.
+
+  Instance ltMaybe_Proper : Proper (equiv ==> equiv ==> equiv) ltMaybe.
   Proof.
-    induction a. intros. simpl. apply plus_n_O.
-    intros. simpl. rewrite <- plus_n_Sm. f_equal. apply IHa.
+    solve_properS ltMaybe.
   Qed.
+  
+  Definition ltMaybeS := injF2 ltMaybe _.
+  

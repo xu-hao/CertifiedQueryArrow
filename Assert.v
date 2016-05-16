@@ -7,6 +7,7 @@ Require Import FMapWeakList List RelationClasses Relation_Definitions Morphisms 
 
 Section Assert.
   Context
+    {pred : Type}
     {val : Type}
     {builtin : Type}.
 
@@ -35,20 +36,23 @@ End Assert.
   Notation "a -∗ b" := (sepImp a b) (right associativity, at level 83).
   Notation "'aexists' v , a" := (aExists v a) (at level 85).
   
-Module AssertModel (VT : ValType) (B: BuiltInExpr VT) (S : Store VT) (H : Heap VT).
+  Module AssertModel (TT: TypeType ) (AT : AddrType ) (PT : PredType) (VT : ValType)
+         (B: BuiltInExpr VT) (S : Store VT) (H : Heap TT AT PT VT).
   Module EM := ExprModel VT B S.
-  Module HU := HeapUtils VT H.
-  Import VT EM S H HU.
-  Definition assertion := @assertion val B.builtInExpr.
-  Instance assertionS : Setoid assertion := @assertionS val B.builtInExpr.
+  Module HU := HeapUtils TT AT PT VT H.
+  Import TT AT PT VT EM S H HU.
+  Definition assertion := @assertion pred val B.builtInExpr.
+  Instance assertionS : Setoid assertion := @assertionS pred val B.builtInExpr.
 
   Fixpoint _models (a : assertion) (s : S.t) (h : H.t) {struct a} : Prop :=
     match a with
       | emp => ~exists a, inDom @ a @ h
-      | [[ expr , pred ]] ⟼ expr2 => exists val val2,
-                   ⟦ expr ⟧expr s == Some val /\
-                   ⟦ expr2 ⟧expr s == Some val2 /\
-                   singleton @ val @ pred @ val2 @ h
+      | [[ expr , pred ]] ⟼ expr2 =>
+        exists val val2 addr1,
+        ⟦ expr ⟧expr s == Some val /\
+        extractAddr @ val == Some addr1 /\                             
+        ⟦ expr2 ⟧expr s == Some val2 /\
+        singleton @ addr1 @ pred @ val2 @ h
       | a0 ∗ a1 => exists h0 h1,
                      h0 ⊥ h1 /\ h0 ⋅ h1 == h /\ _models a0 s h0  /\ _models a1 s h1
       | a0 -∗ a1 => forall h',
@@ -68,8 +72,8 @@ Module AssertModel (VT : ValType) (B: BuiltInExpr VT) (S : Store VT) (H : Heap V
       intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. transitivity v0. auto. auto. auto.
       intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. transitivity v. symmetry. auto. auto. auto.
       intros. unfold _models. split.
-      intro. destruct H1. destruct H1. exists x1. exists x2. rewrite <- H. rewrite <- H0. split. tauto. split. tauto. tauto. 
-      intro. destruct H1. destruct H1. exists x1. exists x2. rewrite H. rewrite H0. split. tauto. split. tauto. tauto. 
+      intro. destruct H1 as [x1 [x2 [x3 ? ] ] ]. exists x1. exists x2. exists x3. rewrite <- H. rewrite <- H0. tauto. 
+      intro. destruct H1 as [x1 [x2 [x3 ? ] ] ]. exists x1. exists x2. exists x3. rewrite H. rewrite H0. tauto. 
       intros. simpl. split.
       intros. destruct H1. destruct H1. exists x1. exists x2. rewrite <- (IHy1 x y H x1 x1 (reflexivity x1)) , <- (IHy2 x y H x2 x2 (reflexivity x2)). rewrite <- H0. auto. 
       intros. destruct H1. destruct H1. exists x1. exists x2. rewrite (IHy1 x y H x1 x1 (reflexivity x1)) , (IHy2 x y H x2 x2 (reflexivity x2)). rewrite H0. auto. 

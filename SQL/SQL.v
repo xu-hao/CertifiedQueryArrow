@@ -1,4 +1,4 @@
-Require Import Assert Command Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens ListLens Utils SetoidUtils MonoidUtils Pointed.
+Require Import Definitions Algebra.Monoid  Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens ListLens MaybeLens Utils SetoidUtils MonoidUtils Pointed Lista Matrixp.
 Require Import Coq.Structures.DecidableTypeEx List  SetoidClass PeanoNat FMapWeakList Basics Coq.Init.Specif.
 
 Module FMapNat := FMapWeakList.Make Nat_as_DT.
@@ -8,10 +8,22 @@ Module FMapNatNat := FMapWeakList.Make NatNat_as_DT.
 Definition singleton {T} (k : nat) (v : T) : FMapNat.t T :=
   FMapNat.add k v (FMapNat.empty T).
 
+Definition sqlPred := nat (* table index *) * nat (* col index *).
+
+Instance sqlPredS : Setoid sqlPred := natS ~*~ natS.
+
+Definition sqlType := nat (* table index *).
+
+Instance sqlTypeS : Setoid sqlType := natS.
+
+Definition sqlAddr := nat (* table index *) * nat (* row index *).
+
+Instance sqlAddrS : Setoid sqlAddr := natS ~*~ natS.
 
 Inductive sqlVal :=
 | vNat : nat -> sqlVal
-| vRow : list nat -> sqlVal
+| vAddr : sqlAddr -> sqlVal
+| vRow : list sqlVal -> sqlVal
 .
 
 Program Instance sqlValS : Setoid sqlVal.
@@ -22,25 +34,29 @@ Module SQLValType <: ValType.
     {
       equiv := eq
     }.
-  Lemma equiv_dec : forall val1 val2, {val1 == val2} + {~ val1 == val2}.
+  Fixpoint equiv_dec val1 val2 : {val1 == val2} + {~ val1 == val2}.
   Proof.
-    intros. simpl. destruct val1, val2. destruct (Nat.eq_dec n n0). left. congruence.
+    destruct val1, val2.
+    destruct (Nat.eq_dec n n0). left. congruence.
     right. congruence.
     right. intro. inversion H.
     right. intro. inversion H.
-    destruct (list_eq_dec Nat.eq_dec l l0).
+    right. intro. inversion H.
+    destruct s as [n n0], s0 as [n1 n2].
+    destruct (Nat.eq_dec n n1), (Nat.eq_dec n0 n2). left. congruence.
+    right. intro. inversion H. tauto.
+    right. intro. inversion H. tauto.
+    right. intro. inversion H. tauto.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    destruct (list_eq_dec equiv_dec l l0).
     left. congruence.
     right. congruence.
   Qed.
 End SQLValType.
 
-Definition table := nat.
-Instance tableS : Setoid nat := natS.
-Definition colind := nat.
-Definition coltype := nat.
-Definition tableSchema := list coltype.
 Definition sqlBuiltIn := nat.
-
 
 Section SQLSyntax.
   
@@ -49,7 +65,7 @@ Section SQLSyntax.
   | sqlValExpr : sqlVal -> sqlExpr
   | sqlVarExpr : var -> sqlExpr
   | sqlAppExpr : sqlBuiltIn -> list sqlExpr -> sqlExpr
-  | sqlColExpr : sqlExpr -> colind -> sqlExpr
+  | sqlColExpr : sqlExpr -> nat (* col index *) -> sqlExpr
   .
 
   Program Instance sqlExprS : Setoid sqlExpr. 
@@ -65,7 +81,7 @@ Section SQLSyntax.
   | sqlQuery : list sqlExpr -> list (sqlTableExpr * var) -> sqlFormula -> sql
   with
   sqlTableExpr :=
-  | sqlTable : table -> sqlTableExpr
+  | sqlTable : nat (* table index *) -> sqlTableExpr
   | sqlSelect : sql -> sqlTableExpr
   .
 
@@ -73,9 +89,9 @@ Section SQLSyntax.
   
   Inductive sqlStmt :=
   | sqlQueryStmt : sql -> sqlStmt
-  | sqlInsertStmt : table -> sql -> sqlStmt
-  | sqlUpdateStmt : table -> colind -> sqlExpr -> sqlFormula -> sqlStmt
-  | sqlDeleteStmt : table -> sqlFormula -> sqlStmt
+  | sqlInsertStmt : nat (* table index *) -> sql -> sqlStmt
+  | sqlUpdateStmt : nat -> nat (* col index *) -> sqlExpr -> sqlFormula -> sqlStmt
+  | sqlDeleteStmt : nat -> sqlFormula -> sqlStmt
   .
 
   Program Instance sqlStmtS : Setoid sqlStmt.
@@ -110,13 +126,20 @@ Section SQLExprInductionPrinciple.
 End SQLExprInductionPrinciple.
 
 Section SQLSemanticsDefs.
-  Definition row := lista nat.
-  Instance rowS : Setoid row := listaS natS.
-  Definition col := lista (maybe nat).
-  Instance colS : Setoid col := listaS (maybeS natS).
-  Definition rowind := nat.
-  Definition database := list (matrixp nat). 
-  Instance databaseS : Setoid database := listS (matrixpS natS).
+  Definition row := lista sqlVal.
+  Instance rowS : Setoid row := listaS sqlValS.
+  Definition col := lista (maybe sqlVal).
+  Instance colS : Setoid col := listaS (maybeS sqlValS).
+  Instance sqlVal_Pointed : Pointed sqlVal :=
+    {
+      point := vNat 0
+    }.
+  
+  Definition table := matrixp sqlVal.
+  Instance tableS : Setoid table := matrixpS sqlValS.
+  Definition database := list table. 
+  Instance databaseS : Setoid database := listS tableS.
+
   Definition store := FMapNat.t sqlVal.
 
 
@@ -134,7 +157,7 @@ Section SQLSemanticsDefs.
     Existing Instance ConstMaybeFunctor.
     Existing Instance ConstMaybe_Applicative.
 
-    Definition _rowGetter t (ri: rowind) : databaseS ~> maybeS (rowS) := previewS @ (nthTraversal @ t ∘ matrixRowTraversal ri).
+    Definition _rowGetter t (ri: nat) : databaseS ~> maybeS (rowS) := previewS @ (nthTraversal @ t ∘ matrixRowTraversal ri).
 
     Instance _rowGetter_Proper : Proper (equiv ==> equiv ==> equiv) _rowGetter.
     Proof.
@@ -143,7 +166,7 @@ Section SQLSemanticsDefs.
 
     Definition rowGetter := injF2 _rowGetter _.
 
-    Definition _colGetter t (ci: colind) : databaseS ~>  maybeS (colS) :=
+    Definition _colGetter t (ci: nat) : databaseS ~>  maybeS (colS) :=
       previewS @ (nthTraversal @ t ∘ matrixColLens @ ci). 
 
     Instance _colGetter_Proper : Proper (equiv ==> equiv ==> equiv) _colGetter.
@@ -162,7 +185,7 @@ Section SQLSemanticsDefs.
 
     Definition rowsGetter := injF _rowsGetter _.
 
-    Definition _tableGetter t : databaseS ~> maybeS (matrixpS natS) := previewS @ (nthTraversal @ t).
+    Definition _tableGetter t : databaseS ~> maybeS tableS := previewS @ (nthTraversal @ t).
 
     Instance _tableGetter_Proper : Proper (equiv ==> equiv) _tableGetter.
     Proof.
@@ -181,29 +204,27 @@ Section SQLSemanticsDefs.
 
     Definition widthGetter := injF _widthGetter _.
 
-    Definition tableRowsGetter : matrixpS natS ~> listaS (maybeS (rowS)) := view (matrixRowsLens).
+   
+    Definition tableRowsGetter : tableS ~> listaS (maybeS (rowS)) := view (matrixRowsLens).
 
-    Definition tableWidthGetter : matrixpS natS ~>  (natS) :=
+    Definition tableWidthGetter : tableS ~>  (natS) :=
       view (matrixWidthLens).
 
-    Definition tableCellGetter ri ci : matrixpS natS ~> (maybeS natS) :=
+    Definition _tableCellGetter ri ci : tableS ~> (maybeS sqlValS) :=
       previewS @ (matrixCellTraversal ri ci).
-    
-    Lemma ConstIso_iso : forall A B (AS : Setoid A) (BS : Setoid B) (a : B),
-            match ConstIsoS BS AS @ a with
-              | ConstIso _ _ a' => a'
-            end = a.
+
+    Instance _tableCellGetter_Proper : Proper (equiv ==> equiv ==> equiv) _tableCellGetter.
     Proof.
-      auto.
+      solve_proper.
     Qed.
 
-    Lemma ConstIso'_iso : forall A B (AS : Setoid A) (BS : Setoid B) a,
-            ConstIso B A (ConstIso' B A a) = a.
-    Proof.
-      intros. destruct a. auto. 
-    Qed.
+    Definition tableCellGetter := injF2 _tableCellGetter  _.
 
-    Definition _maybeRowGetter (t: table) (ri: rowind) : databaseS ~>  maybeS (maybeS rowS) :=
+    Definition rowColGetter n : rowS ~> sqlValS := view (listaNthLens n).
+
+
+
+    Definition _maybeRowGetter (t: nat) (ri: nat) : databaseS ~>  maybeS (maybeS rowS) :=
       previewS @ (nthTraversal @ t ∘ matrixRowsLens ∘ listaNthLens ri). 
 
     Instance _maybeRowGetter_Proper : Proper (equiv ==> equiv ==> equiv) _maybeRowGetter.
@@ -211,26 +232,34 @@ Section SQLSemanticsDefs.
       autounfold. intros. unfold _maybeRowGetter. rewritesr.
     Qed.
 
-    Definition maybeRowGetter := injF2 _maybeRowGetter _.
+    Definition maybeRowGetter : natS ~> natS ~~> databaseS ~~> maybeS (maybeS rowS) := injF2 _maybeRowGetter _.
 
-    Section CellGetter_comp.
-      Opaque matrixCellTraversal.
-    Lemma cellGetter_comp :
-      forall t ri ci h,
-        (tableGetter @ t @ h) >>= tableCellGetter ri ci = cellGetter @ t @ ri @ ci @ h.
+
+
+
+    Lemma tableWidthGetter_1 : forall n (l : lista (maybe (lista sqlVal))), tableWidthGetter @ (matrixpCons _ n l) = n.
     Proof.
-      intros. generalize t h. clear t h. double induction t h.
-      - reflexivity.
-      - intros. Opaque equiv pre0. simpl. unfold _maybe_first_mappend. Transparent pre0. unfold pre0 at 1 2. Opaque pre0. simpl.
-        match goal with
-          | |- ?a = match ?b with _ => _ end => let H:=fresh "H" in assert (a = b) as H; [auto | rewrite H; destruct b; [reflexivity | reflexivity ] ] 
-        end
-          .
-      - intros. simpl. reflexivity.
-      - intros. Opaque equiv pre0. simpl in *. unfold _nthTraversal, _nthTraversal' in *. simpl in *. rewrite ConstIso'_iso. rewrite ConstIso'_iso. apply H0. 
+      intros. reflexivity.
     Qed.
+    
 
-    End CellGetter_comp.
+
+    Lemma widthGetter_0 : forall tab h, widthGetter @ 0 @ (tab :: h) = Some (tableWidthGetter @ tab).
+    Proof.
+      intros. simpl. auto.
+    Qed.
+    
+
+    Section Comps.
+
+      Lemma cellGetter_comp :
+        forall t ri ci h,
+          (tableGetter @ t @ h) >>= tableCellGetter @ ri @ ci == cellGetter @ t @ ri @ ci @ h.
+      Proof.
+        intros. unfold cellGetter. normalize. unfold _cellGetter. rewrite nthTraversal_comp_preview. reflexivity.
+      Qed.
+      
+    End Comps.
 
   End Getters.
   
@@ -241,7 +270,7 @@ Section SQLSemanticsDefs.
     Existing Instance IdentityFunctor.
     Existing Instance Identity_Applicative.
 
-    Definition _cellSetter t (ri: rowind) (ci: colind) (n : nat) : databaseS ~> databaseS :=
+    Definition _cellSetter t (ri: nat) (ci: nat) (n : sqlVal) : databaseS ~> databaseS :=
       setS @ (nthTraversal @ t ∘ matrixCellTraversal ri ci) @ n.
 
     Instance _cellSetter_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv) _cellSetter.
@@ -251,7 +280,7 @@ Section SQLSemanticsDefs.
 
     Definition cellSetter := injF4 _cellSetter _.
     
-    Definition _rowSetter t (ri: rowind) (r : row) : databaseS ~> databaseS :=
+    Definition _rowSetter t (ri: nat) (r : row) : databaseS ~> databaseS :=
       setS @ (nthTraversal @ t ∘ matrixRowTraversal ri) @ r.
 
     Instance _rowSetter_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) _rowSetter.
@@ -261,7 +290,7 @@ Section SQLSemanticsDefs.
 
     Definition rowSetter := injF3 _rowSetter _.
     
-    Definition _maybeRowSetter (t: table) (ri: rowind) (r : maybe row) : databaseS ~>  databaseS :=
+    Definition _maybeRowSetter (t: nat) (ri: nat) (r : maybe row) : databaseS ~>  databaseS :=
       setS @ (nthTraversal @ t ∘ matrixRowsLens ∘ listaNthLens ri) @ r. 
 
     Instance _maybeRowSetter_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) _maybeRowSetter.
@@ -271,7 +300,7 @@ Section SQLSemanticsDefs.
 
     Definition maybeRowSetter := injF3 _maybeRowSetter _.
 
-    Definition _rowsSetter (t: table) (rows : lista (maybe row)) : databaseS ~>  databaseS :=
+    Definition _rowsSetter (t: nat) (rows : lista (maybe row)) : databaseS ~>  databaseS :=
       setS @ (nthTraversal @ t ∘ matrixRowsLens) @ rows.
 
     Instance _rowsSetter_Proper : Proper (equiv ==> equiv ==> equiv) _rowsSetter.
@@ -298,7 +327,7 @@ Section SQLSemanticsDefs.
   
 
   Instance storeS : Setoid store := FMapNatSetoid sqlVal.  
-  Definition colLookup val colind : option nat :=
+  Definition colLookup val colind : option sqlVal :=
     match val with
       | vRow row =>     nth_error row colind
       | _ => None
@@ -312,4 +341,9 @@ Section SQLSemanticsDefs.
     concat (map (fun s => map (fun s2 => storeProd s s2) ss2) ss1).
 
 End SQLSemanticsDefs.
+
+Opaque matrixCellTraversal matrixRowTraversal matrixWidthLens listaNthLens matrixColLens matrixRowsLens maybePrism.
+
+
+Opaque rowsGetter rowsSetter maybeRowGetter maybeRowSetter rowGetter rowSetter cellGetter cellSetter widthGetter tableGetter tableWidthGetter tableRowsGetter tableCellGetter.
 

@@ -6,6 +6,8 @@ Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A 
 
 Section Command.
   Context
+    {type : Type}
+    {pred : Type}
     {val : Type}
     {builtInExpr : Type}
     {builtInFormula : Type}
@@ -90,8 +92,8 @@ Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
 Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
 
 
-Module Type BuiltInFormula (VT : ValType) (S : Store VT) (H : Heap VT).
-  Import VT.
+Module Type BuiltInFormula (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
+  Import TT AT PT VT.
   Parameter builtInFormula : Type.
   Parameter builtInFormulaS : Setoid builtInFormula.
   Parameter appBIF : builtInFormulaS ~> listS valS ~~> H.tS ~~> S.tS ~~> H.lS _ S.tS.
@@ -113,8 +115,8 @@ Section Types.
 
 End Types.
 
-Module Type BuiltInCommand (VT : ValType) (S : Store VT) (H : Heap VT).
-  Import VT.
+Module Type BuiltInCommand (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
+  Import TT AT PT VT.
   Definition state A {AS : Setoid A} : Type := @state0 _ H.tS _ S.tS _ (H.lS) _ AS.
 
   Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @state0S _ H.tS _ S.tS _ (H.lS) _ AS.
@@ -123,15 +125,17 @@ Module Type BuiltInCommand (VT : ValType) (S : Store VT) (H : Heap VT).
   Parameter appBIC : builtInCommandS ~> listS valS ~~> stateS unitS.
 End BuiltInCommand.
 
-Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : Heap VT) (BIF : BuiltInFormula VT S H) (BIC : BuiltInCommand VT S H).
+Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
+       (BIE : BuiltInExpr VT) (S : Store VT) (H : Heap TT AT PT VT)
+       (BIF : BuiltInFormula TT AT PT VT S H) (BIC : BuiltInCommand TT AT PT VT S H).
   Open Scope type_scope.
   Module EM := ExprModel VT BIE S.
-  Module HU := HeapUtils VT H.
-  Import VT EM S H HU BIE BIF BIC.
-  Definition formula := @formula val builtInExpr builtInFormula.
-  Instance formulaS : Setoid formula := @formulaS val builtInExpr builtInFormula.
-  Definition command := @command val builtInExpr builtInFormula builtInCommand.
-  Instance commandS : Setoid command := @commandS val builtInExpr builtInFormula builtInCommand.
+  Module HU := HeapUtils TT AT PT VT H.
+  Import TT AT PT VT EM S H HU BIE BIF BIC.
+  Definition formula := @formula pred val builtInExpr builtInFormula.
+  Instance formulaS : Setoid formula := @formulaS pred val builtInExpr builtInFormula.
+  Definition command := @command type pred val builtInExpr builtInFormula builtInCommand.
+  Instance commandS : Setoid command := @commandS type pred val builtInExpr builtInFormula builtInCommand.
       
   Definition state A {AS : Setoid A} : Type := @state0 _ H.tS _ S.tS _ (lS) _ AS.
 
@@ -290,15 +294,15 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
     apply updateVar2_1.    
   Defined.
   
-  Definition branch (var1 : var) : H.lS _ valS ~> stateS unitS :=
-    choice ∘ fmap @ (updateVar var1).
+  Definition branch (var1 : var) : H.lS _ addrS ~> stateS unitS :=
+    choice ∘ fmap @ (updateVar var1 ∘ addrToVal) .
   
-  Definition branch2 (var1 var2 : var) : H.lS _ (valS ~*~ valS) ~> stateS unitS.
-    refine (choice ∘ fmap @ (injF (fun val1 => updateVar var1 @ (fst val1) >> updateVar var2 @ (snd val1)) _)).
+  Definition branch2 (var1 var2 : var) : H.lS _ (addrS ~*~ valS) ~> stateS unitS.
+    refine (choice ∘ fmap @ (injF (fun val1 => updateVar var1 @ (addrToVal @ (fst val1)) >> updateVar var2 @ (snd val1)) _)).
     Lemma branch2_1 : forall var1 var2, Proper (equiv ==> equiv)
-                                           (fun val1 : val * val =>
+                                           (fun val1 : addr * val =>
                                               
-                                              (updateVar var1 @ fst val1) >> (updateVar var2 @ snd val1)).
+                                              (updateVar var1 @ (addrToVal @ (fst val1))) >> (updateVar var2 @ snd val1)).
     Proof.
       intros. solve_proper.
     Qed.
@@ -367,7 +371,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
 
     Definition lookupBySPOGeneric  : state unit :=
       (lookupBySPO
-        <$> evalExpr @ expr1
+        <$> ((extractAddr <$> evalExpr @ expr1) >>= stopNone)
         <*> pure @ pred1
         <*> evalExpr @ expr2
         <*> getHeap) >>= stopFalse.
@@ -376,7 +380,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
   
   Instance lookupBySPOGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySPOGeneric.
   Proof.
-    solve_proper.
+    solve_properS lookupBySPOGeneric.
   Qed.
   
   
@@ -387,14 +391,14 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
 
     Definition lookupBySubjectGeneric  : state unit :=
       (H.read
-         <$> evalExpr @ expr1
+         <$> ((extractAddr <$> evalExpr @ expr1) >>= stopNone)
          <*> pure @ pred1
          <*> getHeap) >>= stopNone >>= updateVar var1
       .
   End LookupBySubjectGeneric.
   Instance lookupBySubjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySubjectGeneric.
   Proof.
-    solve_proper.    
+    solve_properS lookupBySubjectGeneric.    
   Qed.
 
 
@@ -411,7 +415,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
 
   Instance lookupByObjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupByObjectGeneric.
   Proof.
-    solve_proper. 
+    solve_properS lookupByObjectGeneric. 
   Qed.
 
 
@@ -419,14 +423,14 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
     Context
       (var1 : var) (pred1 : pred) (var2 : var).
     Definition lookupByPredGeneric : state unit :=
-      ret @ (var1 =? var2) >>= stopFalse
-          >> (H.lookupByPred @ pred1
-                <$> getHeap) >>= branch2 var1 var2
+      stopFalse @ (var1 =? var2) >>
+        H.lookupByPred @ pred1
+        <$> getHeap >>= branch2 var1 var2
   .
   End LookupByPredGeneric.
   Instance lookupByPredGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupByPredGeneric.
   Proof.
-    solve_proper.
+    solve_properS lookupByPredGeneric.
   Qed.
 
   Section BuiltInFilterGeneric.
@@ -441,7 +445,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
   End BuiltInFilterGeneric.
   Instance builtInFilterGeneric_Proper : Proper (equiv ==> equiv ==> equiv) builtInFilterGeneric.
   Proof.
-    autounfold.    intros. unfold builtInFilterGeneric. rewritesr. 
+    solve_properS builtInFilterGeneric.
   Qed.
 
   Section NegationGeneric.
@@ -451,7 +455,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
   End NegationGeneric.
   Instance negationGeneric_Proper : Proper (equiv ==> equiv) negationGeneric.
   Proof.
-    autounfold. intros. unfold negationGeneric. rewritesr.
+    solve_properS negationGeneric.
   Qed.
   
   Section ExistentialQuantificationGeneric.
@@ -462,7 +466,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
   End ExistentialQuantificationGeneric.
   Instance existentialQuantificationGeneric_Proper : Proper (equiv ==> equiv ==> equiv) existentialQuantificationGeneric.
   Proof.
-    autounfold. intros. unfold existentialQuantificationGeneric. rewritesr. 
+    solve_properS existentialQuantificationGeneric.
   Qed.
 
   Section ClassicalGeneric.
@@ -473,7 +477,7 @@ Module CommandModel (VT : ValType) (BIE : BuiltInExpr VT) (S : Store VT) (H : He
   End ClassicalGeneric.
   Instance classicalGeneric_Proper : Proper (equiv ==> equiv) classicalGeneric.
   Proof.
-    autounfold. intros. unfold classicalGeneric. rewritesr. 
+    solve_properS classicalGeneric.
   Qed.
   
   Existing Instance sh_NearSemiRing.
@@ -513,25 +517,25 @@ Section MutateGeneric.
 
   Definition mutateGeneric : state unit :=
     (H.update
-      <$> evalExpr @ expr1
+      <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
       <*> pure @ pred0 
       <*> evalExpr @ expr2
       <*> getHeap) >>= putHeap.
 End MutateGeneric.
 Instance mutateGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) mutateGeneric.
 Proof.
-  solve_proper.
+  solve_properS mutateGeneric.
 Qed.
 
 Section NewAddrGeneric.
   Context
     (var1 : var) (type1 : type).
   Definition newAddrGeneric : state unit :=
-    (H.newAddr @ type1 <$> getHeap) >>= stopNone >>= updateVar2 var1.
+    ((idS *** addrToVal) <$> ((H.newAddr @ type1 <$> getHeap) >>= stopNone)) >>= updateVar2 var1.
 End NewAddrGeneric.
 Instance newAddrGeneric_Proper : Proper (equiv ==> equiv ==> equiv) newAddrGeneric.
 Proof.
-  solve_proper.
+  solve_properS newAddrGeneric.
 Qed.
 
 Section BuiltInCommandGeneric.
@@ -542,7 +546,7 @@ Section BuiltInCommandGeneric.
 End BuiltInCommandGeneric.
 Instance builtInCommandGeneric_Proper : Proper (equiv ==> equiv ==> equiv) builtInCommandGeneric.
 Proof.
-  autounfold.    intros. unfold builtInCommandGeneric. rewritesr. 
+  solve_properS builtInCommandGeneric.
 Qed.
 
 Section DeleteGeneric.
@@ -550,7 +554,7 @@ Section DeleteGeneric.
     (expr1 : expr).
   Definition deleteGeneric : state unit :=
     (H.delete
-       <$> evalExpr @ expr1
+       <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
        <*> getHeap) >>= putHeap.
 End DeleteGeneric.
 
@@ -598,10 +602,12 @@ Fixpoint _reduce (comm : command)  : state unit :=
 
 End CommandModel.
 
-Module SemanticEquivalence (VT : ValType) (BIE : BuiltInExpr VT)  (S : Store VT) (H : Heap VT) (BIF : BuiltInFormula VT S H) (BIC : BuiltInCommand VT S H).
+Module SemanticEquivalence (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
+       (BIE : BuiltInExpr VT)  (S : Store VT) (H : Heap TT AT PT VT)
+       (BIF : BuiltInFormula TT AT PT VT S H) (BIC : BuiltInCommand TT AT PT VT S H).
   Module EM := ExprModel VT BIE S.
-  Module CM := CommandModel VT BIE S H BIF BIC.
-  Import VT S H EM CM.
+  Module CM := CommandModel TT AT PT VT BIE S H BIF BIC.
+  Import TT AT PT VT S H EM CM.
   Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
   
   Notation "a ≌ b" := (sem_eq a b) (at level 99).

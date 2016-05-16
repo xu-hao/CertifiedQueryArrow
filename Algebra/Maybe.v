@@ -1,4 +1,4 @@
-Require Import Algebra.PairUtils Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.MonoidUtils Algebra.SetoidUtils.
+Require Import Algebra.PairUtils Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.MonoidUtils Algebra.SetoidUtils Tactics.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
@@ -23,6 +23,35 @@ Proof.
 Defined.
 
 
+Instance Some_Proper A (AS : Setoid A) : Proper (equiv ==> equiv) (@Some A).
+Proof.
+  autounfold. intros. simpl. auto.
+Qed.
+
+Definition SomeS {A} {AS : Setoid A} : AS ~> optionS AS := injF Some _.
+
+Definition caseMaybe {A B} {AS : Setoid A} {BS : Setoid B} (some : AS ~> BS) (none : B) val1 : B :=
+  match val1 with
+    | Some n => some @ n
+    | None => none
+  end
+.
+
+Instance caseMaybe_Proper A B AS BS : Proper (equiv ==> equiv ==> equiv ==> equiv) (@caseMaybe A B AS BS).
+Proof.
+  autounfold. intros. unfold caseMaybe. matchequiv. simpl in H1. rewritesr.  auto. 
+Qed.
+
+Definition caseMaybeS {A B AS BS} := injF3 (@caseMaybe A B AS BS) _.
+
+Lemma maybe_case : forall {A} (a : option A), a = None \/ exists b, a = Some b.
+  Proof.
+    intros. destruct a.
+    right. exists a. auto.
+    left. auto.
+  Qed.
+  
+
 Section MaybeMonad.
 
     Definition maybe A {SA : Setoid A} := option A.
@@ -37,57 +66,32 @@ Section MaybeMonad.
 
       Definition maybe_bind : (maybeS SA) ~> (SA ~~> maybeS SB) ~~> maybeS SB.
 
-        simple refine (injF (fun a => injF (fun f =>
-                                       match a with
-                                         | None => None
-                                         | Some a' => f @ a'
-                                       end
-                                    ) _) _).
-        Lemma maybe_bind_1 : forall a, Proper (equiv ==> equiv)
-     (fun f : SA ~> maybeS SB =>
-      match a with
-      | Some a' => f @ a'
-      | None => None
-      end).
+        simple refine (injF2 (fun a f =>
+                                       caseMaybeS @ f @ None @ a
+                                    ) _).
+        Lemma maybe_bind_1 : Proper (equiv ==> equiv ==> equiv)
+                                    (fun (a : option A) (f : SA ~> maybeS SB) => caseMaybeS @ f @ None @ a).
         Proof.
-          repeat autounfold. intros. destruct a. rewrite H. reflexivity. reflexivity.
+          repeat autounfold. intros. rewritesr. 
         Qed.
         apply maybe_bind_1.
-        
-        Lemma maybe_bind_2: forall pr, Proper (equiv ==> equiv)
-                                         (fun a : option A =>
-                                            injF
-                                              (fun f : SA ~> maybeS SB =>
-                                                 match a with
-                                                   | Some a' => f @ a'
-                                                   | None => None
-                                                 end) (pr a)).
-        Proof.
-          repeat autounfold. intros. arrequiv. destruct x,y. simpl in H. assert (a @ a0 == a @ a1). rewrite H. reflexivity. generalize (a @ a0) (a @ a1) H0. intros. destruct o, o0. auto. inversion H1. inversion H1. auto. inversion H. inversion H. auto.
-        Qed.
-        apply maybe_bind_2.
       Defined.
     End Bind.
+
     Section Ret.
             Context
         {A : Type}
         {SA : Setoid A}.
 
-      Definition maybe_ret : SA ~> maybeS SA.
-        simple refine (injF Some _).
-        Lemma maybe_ret_1 : Proper (equiv ==> equiv) Some.
-          repeat autounfold. intros. simpl. auto.
-        Qed.
-        apply maybe_ret_1.
-      Defined.
+      Definition maybe_ret : SA ~> maybeS SA := SomeS.
     End Ret.
 
-     Instance maybe_Monad : @Monad maybe (@maybeS).
+    Instance maybe_Monad : @Monad maybe (@maybeS).
     Proof.
       exists (@maybe_ret) (@maybe_bind) .
       intros. simpl. destruct f. simpl. destruct (x a). reflexivity.  auto.
-      intros. simpl. destruct a. reflexivity. auto.
-      intros. simpl. destruct f, g. simpl. destruct a. destruct (x a). destruct (x0 b). reflexivity. auto. auto. auto.
+      intros. simpl. destruct a. simpl. reflexivity. simpl. auto.
+      intros. simpl. destruct f, g. simpl. destruct a. simpl. destruct (x a). simpl. destruct (x0 b). reflexivity. auto. simpl. auto. simpl. auto.
     Defined.
 
   End MaybeMonad.

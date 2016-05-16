@@ -1,4 +1,4 @@
-Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad LensTypes MaybeLens Tactics Utils Monoid MonoidUtils.
+Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad LensTypes Tactics Utils Monoid MonoidUtils.
 Require Import SetoidClass List.
 
 
@@ -100,6 +100,23 @@ Definition preS {A} {B} {AS : Setoid A} {BS : Setoid B} := injF (@pre A B _ _) _
 
 Definition previewS {A} {B} {AS : Setoid A} {BS : Setoid B} : ((BS ~~> ConstMaybeS BS BS) ~~> (AS ~~> ConstMaybeS BS AS)) ~> AS ~~> maybeS BS := viewS ∘ preS.
 
+Lemma comp_associativity : forall {A} {B} {C} {D} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} (f : AS ~> BS) (g : BS ~> CS) (h : CS ~> DS),
+                             h ∘ g ∘ f == h ∘ (g ∘ f).
+Proof.
+  intros. simpl_equiv. normalizecomp. reflexivity.
+Qed.
+
+Lemma compM_associativity : forall {A} {B} {C} {D} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} {m mS} {mnd : @Monad m mS} (f : AS ~> mS _ BS) (g : BS ~> mS _ CS) (h : CS ~> mS _ DS),
+                             f >=> g >=> h == f >=> (g >=> h).
+Proof.
+  intros. simpl_equiv. normalize_monad. reflexivity.
+Qed.
+
+Lemma comp_compM : forall {A} {B} {C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {m mS} {mnd : @Monad m mS} (f : AS ~> BS) (g : BS ~> mS _ CS),
+                             g ∘ f == ret ∘ f >=> g.
+Proof.
+  intros. simpl_equiv. normalize_monad. reflexivity.
+Qed.
 
 (*
 Definition lens_iso {A B} {AS : Setoid A} {BS : Setoid B}

@@ -174,8 +174,14 @@ Section MapS.
     reflexivity.
   Qed.
 
+   
 
 End MapS.
+ Lemma mapS_mapS : forall A (AS : Setoid A) B (BS : Setoid B) C (CS : Setoid C) (f : AS ~> BS) (g : BS ~> CS) (l : list A),
+                        mapS @ g @ (mapS @ f @ l) = mapS @ (comp f g) @ l.
+    Proof.
+      intros. unfold mapS. normalize. rewrite map_map. reflexivity.
+    Qed.
 
 Section Fold_rightS.
   Context

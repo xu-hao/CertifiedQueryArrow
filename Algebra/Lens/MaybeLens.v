@@ -2,46 +2,37 @@ Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.Pai
 Require Import SetoidClass Vector.
 
 
-Definition _maybePrism' {A} {AS : Setoid A} : _Prism' (maybe A) A.
-  unfold _Prism'. intros. refine (match X0 with
-                                    | None => pure @ X0
-                                    | Some a => SomeS <$> X @ a
-                                  end).
+Inductive MaybePreview := maybePreview.
+
+Program Instance MaybePreviewS : Setoid MaybePreview.
+
+Definition _MaybePreview_set {A} {AS : Setoid A} (_ : MaybePreview) (a : A) : maybeS AS ~> maybeS AS :=
+  caseMaybeS
+    @ (constS _ @ (SomeS @ a))
+    @ None.
+
+Instance _MaybePreview_set_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv) (@_MaybePreview_set A AS).
+Proof.
+  autounfold. intros. unfold _MaybePreview_set. rewritesr.
+Qed.
+
+Definition MaybePreview_set {A} {AS : Setoid A} := injF2 (@_MaybePreview_set A AS) _.
+
+Definition MaybePreview_preview {A} {AS : Setoid A} : MaybePreviewS ~> maybeS AS ~~> maybeS AS :=
+  constS _ @ idS.
+
+Instance maybePreview_Settable A (AS : Setoid A) : @Settable (maybe A) A _  _ MaybePreview _ .
+Proof.
+  split.
+  exact (MaybePreview_set).
 Defined.
 
-Definition _maybePrism {f fS func} {app : @Applicative f fS func} {A} {AS : Setoid A} :
-  (AS ~> fS _ AS) -> maybe A -> f (maybe A) _ := _maybePrism' f fS func app.
-
-Instance _maybePrism_Proper {f fS func} {app : @Applicative f fS func} A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv) (_maybePrism).
+Instance maybePreview_Preview A (AS : Setoid A) : @Preview (maybe A) A _ _ MaybePreview _ _.
 Proof.
-  autounfold. intros. unfold _maybePrism, _maybePrism'. matchequiv. simpl in H0.  rewritesr.
-Qed.
+  exists (MaybePreview_preview).
+  intros. destruct a; [simpl; reflexivity | simpl in H; tauto].
+  intros. destruct a; [simpl in H; tauto | simpl; auto].
+  intros. destruct a; [simpl in *; symmetry; auto | simpl; auto].
+  intros. destruct a; [simpl in H; tauto | simpl; auto].
 
-Definition maybePrism {f fS func} {app : @Applicative f fS func} {A} {AS : Setoid A} := injF2 _maybePrism _.
-
-
-
-
-Lemma maybePrism_comp_preview:
-  forall (A : Type) (AS : Setoid A)
-       B (BS : Setoid B) (l : (BS ~~> ConstS (maybeS BS) BS) ~> AS ~~> ConstS (maybeS BS) AS),
-    previewS @ (maybePrism ∘ l) == previewS @ maybePrism >=> previewS @ l.
-Proof.
-  intros. simpl_equiv.  Opaque equiv. simpl. unfold _maybePrism, _maybePrism', _pre0. destruct a.
-  - simpl. reflexivity.
-  - simpl. reflexivity. 
-Qed.
-
-
-Lemma maybePrism_comp_set:
-  forall (A : Type) (AS : Setoid A)
-       B (BS : Setoid B) (l : (BS ~~> IdentityS BS) ~> AS ~~> IdentityS AS) b h,
-    set (maybePrism ∘ l) @ b @ h == caseMaybeS
-                                      @ (flipS @ set maybePrism @ h ∘ set l @ b)
-                                      @ h
-                                      @ (previewS @ maybePrism @ h).
-Proof.
-  intros. destruct h.
-  - simpl. reflexivity.
-  - simpl. reflexivity. 
-Qed.
+Defined.

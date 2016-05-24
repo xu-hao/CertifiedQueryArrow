@@ -222,6 +222,8 @@ Section ConstFunctor.
     intros. destruct a. auto. 
   Qed.
 
+  Definition ConstCastS {A B C} (CS : Setoid C) (AS : Setoid A) (BS : Setoid B) : ConstS CS AS ~> ConstS CS BS := ConstIsoS _ _ ∘ ConstIsoS' _ _. 
+
 End ConstFunctor.
 
 Notation "a <$> b" := (fmap  @ a @ b) (at level 49, left associativity).

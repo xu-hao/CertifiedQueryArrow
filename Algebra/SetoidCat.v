@@ -252,6 +252,8 @@ Hint Unfold Proper respectful.
 
 Ltac evalproper := apply eval_Proper; [try reflexivity | try reflexivity].
 
+Ltac normalizeHyp H := repeat (repeat unfold injF2, injF3, injF4, injF5, injF6 in H; rewrite eval_injF in H).
+
 Ltac normalize := repeat (repeat unfold injF2, injF3, injF4, injF5, injF6; rewrite eval_injF).
 Ltac normalizecomp := repeat (repeat unfold comp, injF2, injF3, injF4, injF5, injF6; rewrite eval_injF).
 Ltac simpl_equiv := unfold equiv;

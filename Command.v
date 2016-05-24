@@ -126,10 +126,10 @@ Module Type BuiltInCommand (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT 
 End BuiltInCommand.
 
 Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
-       (BIE : BuiltInExpr VT) (S : Store VT) (H : Heap TT AT PT VT)
+        (S : Store VT) (H : Heap TT AT PT VT) (BIE : BuiltInExpr TT AT PT VT S H) 
        (BIF : BuiltInFormula TT AT PT VT S H) (BIC : BuiltInCommand TT AT PT VT S H).
   Open Scope type_scope.
-  Module EM := ExprModel VT BIE S.
+  Module EM := ExprModel TT AT PT VT  S H BIE.
   Module HU := HeapUtils TT AT PT VT H.
   Import TT AT PT VT EM S H HU BIE BIF BIC.
   Definition formula := @formula pred val builtInExpr builtInFormula.
@@ -263,7 +263,10 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
 
   Definition evalExpr : exprS ~> stateS valS.
     simple refine (injF (fun expr1 => 
-    getStore >>= ret ∘ (exprEval' @ expr1) >>= stopNone) _).
+                           (exprEval
+                             <$> getHeap
+                             <*> getStore
+                             <*> pure @ expr1) >>= stopNone) _).
   Defined.
 
   Existing Instance valS.
@@ -603,10 +606,10 @@ Fixpoint _reduce (comm : command)  : state unit :=
 End CommandModel.
 
 Module SemanticEquivalence (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
-       (BIE : BuiltInExpr VT)  (S : Store VT) (H : Heap TT AT PT VT)
+       (S : Store VT)    (H : Heap TT AT PT VT) (BIE : BuiltInExpr TT AT PT VT S H)
        (BIF : BuiltInFormula TT AT PT VT S H) (BIC : BuiltInCommand TT AT PT VT S H).
-  Module EM := ExprModel VT BIE S.
-  Module CM := CommandModel TT AT PT VT BIE S H BIF BIC.
+  Module EM := ExprModel TT AT PT VT  S H BIE.
+  Module CM := CommandModel TT AT PT VT S  H BIE BIF BIC.
   Import TT AT PT VT S H EM CM.
   Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
   

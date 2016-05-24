@@ -4,202 +4,335 @@ Require Import SetoidClass List.
 
 Existing Instance ConstS.
 
-Definition view {A} {B} {AS : Setoid A} {BS : Setoid B} (l : (BS ~~> ConstS BS BS) ~> (AS ~~> ConstS BS AS)) : AS ~> BS := ConstIsoS' _ _ ∘ (l @ ConstIsoS _ _).
+Section Settable.
 
-Instance view_Proper {A} {B} {AS : Setoid A} {BS : Setoid B} : Proper (equiv ==> equiv) (@view A B _ _).
-Proof.
-  autounfold. intros. unfold view. rewritesr.
-Qed.
+  Context
+    {A B}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {t}
+    {tS : Setoid t}.
+  
+  Class Settable :=
+    {
+      set : tS ~> BS ~~> AS ~~> AS;
+    }.
 
-Definition viewS {A} {B} {AS : Setoid A} {BS : Setoid B} := injF (@view A B _ _) _.
+End Settable.
 
-Definition set {A} {B} {AS : Setoid A} {BS : Setoid B} (l : (BS ~~> IdentityS BS) ~> (AS ~~> IdentityS AS)) : BS ~> AS ~~> AS :=  (flipS @ compS @ IdentityIsoS' _) ∘ l ∘ (flipS @ compS @ IdentityIsoS BS ∘ constS BS).
+Section PreLens.
 
-Instance set_Proper {A} {B} {AS : Setoid A} {BS : Setoid B} : Proper (equiv ==> equiv) (@set A B _ _).
-Proof.
-  autounfold. intros. unfold set. rewritesr.
-Qed.
+  Context
+    {A B}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {t}
+    {tS : Setoid t}
+    {sett : @Settable A B AS BS t tS}.
+  
+  Class PreLens :=
+    {
+      view : tS ~> AS ~~> BS;
+      set_view: forall l a, set @ l @ (view @ l @ a) @ a == a    
+    }.
 
-Definition setS {A} {B} {AS : Setoid A} {BS : Setoid B} := injF (@set A B _ _) _.
+End PreLens.
 
-Existing Instance nat_Monoid.
-Existing Instance ConstFunctor.
-Existing Instance Const_Applicative.
-Existing Instance ConstS.
+Section Preview.
+
+  Context
+    {A B}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {t}
+    {tS : Setoid t}
+    {sett : @Settable A B AS BS t tS}.
+  
+  Class Preview  :=
+    {
+      preview : tS ~> AS ~~> maybeS BS;
+      preview_set_Some : forall l a b b2, preview @ l @ a == Some b2 ->
+                                          preview @ l @ (set @ l @ b @ a) == Some b;
+      preview_set_None : forall l a b, preview @ l @ a == None ->
+                                          preview @ l @ (set @ l @ b @ a) == None;
+      set_preview_Some: forall l a b, preview @ l @ a == Some b ->
+                                      set @ l @ b @ a == a;
+      set_preview_None: forall l a b, preview @ l @ a == None ->
+                                      set @ l @ b @ a == a
+    }.
+
+  Definition _pset_set (ps : tS ~> BS ~~> AS ~~> AS) (l: t) (b: maybe B) (a: A) : A :=
+    caseMaybeS
+      @ (cycle23S @ ps @ l @ a)
+      @ a
+      @ b.
+
+  Instance _pset_set_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv) _pset_set.
+  Proof.
+    solve_properS _pset_set.
+  Qed.
+
+  Definition pset_set := injF4 _pset_set _.
+  
+  Instance Preview_Maybe_Settable (prv : Preview) : @Settable A (maybe B) _ _ t tS.
+  Proof.
+    split.
+    exact (pset_set @ set).
+  Defined.
+  
+  Instance Preview_PreLens (prv : Preview) : @PreLens A (maybe B) _ _ t tS _.
+  Proof.
+    exists (preview) .
+    intros. simpl. unfold _pset_set. simpl. unfold caseMaybe. simpl. destruct (maybe_case (preview @ l @ a)).
+    - rewrite H. reflexivity.
+    - destruct H. rewrite H. apply set_preview_Some. rewrite H. reflexivity.
+  Defined.
+   
+End Preview.
+
+Section Lens.
+
+  Context
+    {A B}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {t}
+    {tS : Setoid t}
+    {sett}
+    {pl : @PreLens A B AS BS t tS sett}.
+  
+  Class Lens :=
+    {
+      set_set : forall (l : t) (a : A) (b1 b2 : B), set @ l @ b2 @ (set @ l @ b1 @ a) == set @ l @ b2 @ a;
+      view_set : forall (l : t) (a : A) (b : B), view @ l @ (set @ l @ b @ a) == b
+    }.
+
+  Definition Lens_preview : tS ~> AS ~~> maybeS BS := comp2S @ view @ SomeS.
+  Instance Lens_Preview (ls : Lens) : @Preview A B AS BS t tS sett.
+  Proof.
+    exists (Lens_preview).
+    intros. simpl in *. rewrite view_set. reflexivity.
+    intros. simpl in *. auto.
+    intros. simpl in *. rewrite <- H. rewrite set_view. reflexivity.
+    intros. simpl in *. tauto.
+  Defined.
+  
+
+End Lens.
+
+
+
+
+Section ComposePreLens.
+  Context
+    {A B C}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {CS : Setoid C}
+    {t}
+    {tS : Setoid t}
+    {sett}
+    {pl : @PreLens A B AS BS t tS sett}
+    {t2}
+    {t2S : Setoid t2}
+    {sett2}
+    {pl2 : @PreLens B C BS CS t2 t2S sett2}.
+  
+  Inductive ComposeL := ComposeLIso : t -> t2 -> ComposeL.
+
+  Definition ComposeL_equiv l l' :=
+    match l, l' with
+      | ComposeLIso l1 l2, ComposeLIso l1' l2' => l1 == l1' /\ l2 == l2'
+    end. 
+
+  Instance ComposeL_equiv_Equivalence : Equivalence ComposeL_equiv.
+  Proof.
+    split.
+    autounfold. intros. destruct x.  simpl.  split; [reflexivity | reflexivity].
+    autounfold. intros. destruct x, y. destruct H. split; [symmetry ; auto | symmetry ; auto].
+    autounfold. intros. destruct x, y, z. destruct H, H0. split; [transitivity t3; [auto | auto] | transitivity t4; [auto | auto]].
+  Qed.
+
+  Instance ComposeLS : Setoid ComposeL :=
+    {
+      equiv := ComposeL_equiv
+    }
+  .
+  
+  Definition _ComposeL_view l : AS ~> CS :=
+    match l with
+      | ComposeLIso l1 l2 => view @ l2 ∘ view @ l1
+    end.
+
+  Instance _ComposeL_view_Proper : Proper (equiv ==> equiv) _ComposeL_view.
+  Proof.
+    autounfold. intros. destruct x,y. destruct H. simpl. arrequiv. rewritesr.
+  Qed.
+
+  Definition ComposeL_view : ComposeLS ~> AS ~~> CS := injF _ComposeL_view _.
+
+  Definition _ComposeL_set l (c : C) (a : A) : A :=
+    match l with
+      | ComposeLIso l1 l2 => set @ l1 @ (set @ l2 @ c @ (view @ l1 @ a)) @ a
+    end.
+
+  Instance _ComposeL_set_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) _ComposeL_set.
+  Proof.
+    autounfold. intros. destruct x, y. destruct H. simpl. rewritesr.
+  Qed.
+
+  Definition ComposeL_set := injF3 _ComposeL_set _.
+
+  Instance ComposeL_Settable : @Settable A C AS CS ComposeL ComposeLS.
+  Proof.
+    split.
+    exact ComposeL_set.
+  Defined.
+  
+  Instance ComposeL_PreLens : @PreLens A C AS CS ComposeL ComposeLS _.
+  Proof.
+    exists ComposeL_view .
+    intros. destruct l. simpl. rewrite set_view. rewrite set_view. reflexivity.
+  Defined.
+
+End ComposePreLens.
+
+Section ComposePreview.
+  Context
+    {A B C}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {CS : Setoid C}
+    {t}
+    {tS : Setoid t}
+    {sett}
+    {prv : @Preview A B AS BS t tS sett}
+    {t2}
+    {t2S : Setoid t2}
+    {sett2}
+    {prv2 : @Preview B C BS CS t2 t2S sett2}.
+
+  Inductive ComposeP := ComposePIso : t -> t2 -> ComposeP.
+
+  Definition ComposeP_equiv l l' :=
+    match l, l' with
+      | ComposePIso l1 l2, ComposePIso l1' l2' => l1 == l1' /\ l2 == l2'
+    end. 
+
+  Instance ComposeP_equiv_Equivalence : Equivalence ComposeP_equiv.
+  Proof.
+    split.
+    autounfold. intros. destruct x.  simpl.  split; [reflexivity | reflexivity].
+    autounfold. intros. destruct x, y. destruct H. split; [symmetry ; auto | symmetry ; auto].
+    autounfold. intros. destruct x, y, z. destruct H, H0. split; [transitivity t3; [auto | auto] | transitivity t4; [auto | auto]].
+  Qed.
+
+  Instance ComposePS : Setoid ComposeP :=
+    {
+      equiv := ComposeP_equiv
+    }
+  .
+  
+  Definition _ComposeP_preview (l :ComposeP ) (a : A) : maybe C :=
+    match l with
+      | ComposePIso l1 l2 =>
+        caseMaybeS
+          @ (preview @ l2)
+          @ None
+          @ (preview @ l1 @ a)
+    end.
+
+  Instance _ComposeP_preview_Proper : Proper (equiv ==> equiv ==> equiv) _ComposeP_preview.
+  Proof.
+    autounfold. intros. destruct x,y. destruct H. unfold _ComposeP_preview.   rewritesr.
+  Qed.
+
+  Definition ComposeP_preview := injF2 _ComposeP_preview _.
+  
+  Definition _ComposeP_Preview_set (l : ComposeP) (c : C) (a : A) : A :=
+    match l with
+      | ComposePIso l1 l2 =>
+        caseMaybeS
+          @ (flipS @ (set @ l1) @ a ∘ set @ l2 @ c)
+          @ a
+          @ (preview @ l1 @ a)
+    end.
+
+  Instance _ComposeP_Preview_set_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) _ComposeP_Preview_set.
+  Proof.
+    autounfold. intros. destruct x,y. destruct H. unfold _ComposeP_Preview_set. rewritesr.
+  Qed.
+
+  Definition ComposeP_Preview_set : (ComposePS) ~> CS ~~> AS ~~> AS := injF3 _ComposeP_Preview_set _.
+
+  Instance ComposeP_Settable : @Settable A C AS CS (ComposeP) (ComposePS).
+  Proof.
+    split.
+    exact ComposeP_Preview_set.
+  Defined.
+  
+  Instance ComposeP_Preview : @Preview A C AS CS (ComposeP) (ComposePS) _.
+  Proof.    
+    exists ComposeP_preview.
+    - intros. destruct l. unfold ComposeP_preview, _ComposeP_preview in *. normalize. unfold injF2 in H. repeat rewrite eval_injF in H. destruct (maybe_case (preview @ t0 @ a)).
+      + rewrite H0 in H. simpl in H. tauto.
+      + destruct H0. rewrite H0 in *. simpl set.  unfold ComposeP_Preview_set, _ComposeP_Preview_set. normalize. rewrite H0. simpl ((caseMaybeS @ (flipS @ (set @ t0) @ a ∘ set @ t1 @ b) @ a @ Some x)). rewrite @preview_set_Some with (b2:=x); [| rewrite H0; reflexivity]. Opaque equiv. simpl in *. destruct (maybe_case (preview @ t1 @ x)).
+        *   rewrite H1 in H. inversion H.
+        * destruct H1. apply @preview_set_Some with (b2:=x0). rewrite H1. reflexivity.
+    - intros. destruct l. simpl in *. destruct (maybe_case (preview @ t0 @ a)).
+      + rewrite H0 in *. simpl in *. rewrite H0. reflexivity.
+      + destruct H0. rewrite H0 in *. simpl in *. rewrite @preview_set_Some with (b2:=x); [| rewrite H0; reflexivity]. simpl. apply preview_set_None. auto.
+    - intros. destruct l. simpl in *. destruct (maybe_case (preview @ t0 @ a)).
+      + rewrite H0 in *. simpl in *. reflexivity.
+      + destruct H0. rewrite H0 in *. simpl in *. rewrite set_preview_Some. reflexivity. rewrite H0. rewrite set_preview_Some. reflexivity. auto.
+    - intros. destruct l. simpl in *. destruct (maybe_case (preview @ t0 @ a)).
+      + rewrite H0 in *. simpl in *. reflexivity.
+      + destruct H0. rewrite H0 in *. simpl in *. rewrite set_preview_Some. reflexivity. rewrite H0. rewrite set_preview_None. reflexivity. auto.
+  Defined.
+  
+End ComposePreview.
+
+Section ComposeLens.
+  Context
+    {A B C}
+    {AS : Setoid A}
+    {BS : Setoid B}
+    {CS : Setoid C}
+    {t}
+    {tS : Setoid t}
+    {sett pl }
+    {ls : @Lens A B AS BS t tS sett pl}
+    {t2}
+    {t2S : Setoid t2}
+    {sett2 pl2}
+    {ls2 : @Lens B C BS CS t2 t2S sett2 pl2}.
+
+  Existing Instance ComposeL_Settable.
+  Existing Instance ComposeL_PreLens.
+  Instance ComposeL_Lens : @Lens A C AS CS (@ComposeL t t2) (@ComposeLS t tS t2 t2S) _ _.
+  Proof.
+    split.
+    intros. destruct l. simpl. rewrite set_set. rewrite view_set. rewrite set_set. reflexivity.
+    intros. destruct l. simpl. rewrite view_set. rewrite view_set. reflexivity.
+  Qed.
+
+End ComposeLens.
+
+Notation "a >>> b" := (ComposeLIso a b) (at level 45, left associativity).
+Notation "a >>>? b" := (ComposePIso a b) (at level 45, left associativity).
+
+Existing Instance ComposePS.
+Existing Instance ComposeP_Preview.
+Existing Instance ComposeP_Settable.
 Existing Instance maybe_Monad.
-Existing Instance monadFunctor.
-Existing Instance monad_Applicative.
-Existing Instance IdentityS.
-Existing Instance IdentityFunctor.
-Existing Instance Identity_Applicative.
 
-
-
-Definition ConstMaybe C {CS : Setoid C} A {AS : Setoid A} := ConstFunc (maybe C) A.
-Instance ConstMaybeS {C} (CS : Setoid C) {A} (AS : Setoid A) : Setoid (ConstMaybe C A) :=
-  ConstS (maybeS CS) AS.
-
-Instance ConstMaybeFunctor {C} {CS : Setoid C} : @Functor (ConstMaybe C) _ := ConstFunctor (maybe C) _.
-
-
-Definition _maybe_first_mappend {C} {CS : Setoid C}  (a b : maybe C) : maybe C :=
-  match a with
-    | None => b
-    | Some a' => a
-  end
-.
-
-Instance _maybe_first_mappend_Proper {C} {CS : Setoid C}  : Proper (equiv ==> equiv ==> equiv) _maybe_first_mappend.
-Proof.
-  autounfold. intros. unfold _maybe_first_mappend. matchequiv. auto. auto. 
-Qed.
-
-Definition maybe_first_mappend {C} {CS : Setoid C} : maybeS CS ~> maybeS CS ~~> maybeS CS := injF2 _maybe_first_mappend _.
-      
-Instance maybe_first_Monoid {C} {CS : Setoid C} : @Monoid (maybe C) _.
-Proof.
-  exists (None) (maybe_first_mappend).
-  intros. simpl. destruct a. reflexivity. auto.
-  intros. destruct a. simpl. reflexivity. simpl. auto.
-  intros. destruct a. simpl. reflexivity. destruct b. simpl. reflexivity. simpl. destruct c.  reflexivity.  auto.
-Defined.
-
-Instance ConstMaybe_Applicative {C} {CS : Setoid C}  : @Applicative (ConstMaybe C) _ _ := Const_Applicative.
-      
-Definition ConstMaybeIsoS' {C} (CS : Setoid C) {A} (AS : Setoid A) : ConstMaybeS CS AS ~> maybeS CS :=
-  ConstIsoS' (maybeS CS) AS.
-
-Definition _pre0 {B} {BS : Setoid B} (f : maybeS BS ~> ConstS (maybeS BS) (maybeS BS)) ( a : B) : ConstMaybe B B := ConstIsoS _ _ @ (ConstMaybeIsoS' _ _ @ (f @ (SomeS @ a))).
-
-Instance _pre0_Proper {B} {BS : Setoid B} : Proper (equiv ==> equiv ==> equiv) _pre0.
-Proof.
-  autounfold. intros. unfold _pre0. rewritesr. 
-Qed.
-
-Definition pre0 {B} {BS : Setoid B} := injF2 _pre0 _.
-    
-(* Definition _pre1 {A B} {AS : Setoid A} {BS : Setoid B} (f : AS ~> ConstMaybeS BS AS) ( a : A) : ConstMaybe (maybe B) A := ConstIsoS _ _ @ (ConstMaybeIsoS' _ _ @ (f @ a)).
-
-Instance _pre1_Proper {A B} {AS : Setoid A} {BS : Setoid B} : Proper (equiv ==> equiv ==> equiv) _pre1.
-Proof.
-  autounfold. intros. unfold _pre1. rewritesr. 
-Qed.
-
-Definition pre1 {A B} {AS : Setoid A} {BS : Setoid B} := injF2 _pre0 _. *)
-    
-Definition pre {A} {B} {AS : Setoid A} {BS : Setoid B} (l : (BS ~~> ConstMaybeS BS BS) ~> (AS ~~> ConstMaybeS BS AS)) : (maybeS BS ~~> ConstS (maybeS BS) (maybeS BS)) ~> (AS ~~> ConstS (maybeS BS) AS)
-  :=
-  l ∘ pre0.
-
-Instance pre_Proper {A} {B} {AS : Setoid A} {BS : Setoid B} : Proper (equiv ==> equiv) (@pre A B _ _).
-Proof.
-  autounfold. intros. unfold pre. rewritesr.
-Qed.
-
-Definition preS {A} {B} {AS : Setoid A} {BS : Setoid B} := injF (@pre A B _ _) _.
-
-Definition previewS {A} {B} {AS : Setoid A} {BS : Setoid B} : ((BS ~~> ConstMaybeS BS BS) ~~> (AS ~~> ConstMaybeS BS AS)) ~> AS ~~> maybeS BS := viewS ∘ preS.
-
-Lemma comp_associativity : forall {A} {B} {C} {D} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} (f : AS ~> BS) (g : BS ~> CS) (h : CS ~> DS),
-                             h ∘ g ∘ f == h ∘ (g ∘ f).
-Proof.
-  intros. simpl_equiv. normalizecomp. reflexivity.
-Qed.
-
-Lemma compM_associativity : forall {A} {B} {C} {D} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} {m mS} {mnd : @Monad m mS} (f : AS ~> mS _ BS) (g : BS ~> mS _ CS) (h : CS ~> mS _ DS),
-                             f >=> g >=> h == f >=> (g >=> h).
-Proof.
-  intros. simpl_equiv. normalize_monad. reflexivity.
-Qed.
-
-Lemma comp_compM : forall {A} {B} {C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {m mS} {mnd : @Monad m mS} (f : AS ~> BS) (g : BS ~> mS _ CS),
-                             g ∘ f == ret ∘ f >=> g.
-Proof.
-  intros. simpl_equiv. normalize_monad. reflexivity.
-Qed.
-
-(*
-Definition lens_iso {A B} {AS : Setoid A} {BS : Setoid B}
-           (l : forall f fS (func : @Functor f fS), (BS ~~> fS _ BS) ~> (AS ~~> fS _ AS)) :
-  AS ~> BS ~*~ (BS ~~> AS) :=
-  viewS @ l _ _ _ &&& flipS @ (setS @ l _ _ _). 
-  
-Definition _lens_iso' {A B} {AS : Setoid A} {BS : Setoid B}
-           (l : AS ~> BS ~*~ (BS ~~> AS)) f fS (func : @Functor f fS) (g : BS ~> fS _ BS) (a : A) : f A _ :=
-  match l @ a with
-    | (v, s) => s <$> g @ v
-  end.
-
-Instance _lens_iso'_Proper  {A B} {AS : Setoid A} {BS : Setoid B} (l : AS ~> BS ~*~ (BS ~~> AS)) {f fS} {func : @Functor f fS}: Proper (equiv ==> equiv ==> equiv) (_lens_iso' l _ _ _).
-Proof.
-  autounfold. intros. unfold _lens_iso'. simpl_let. rewritesr.
-Qed.
-
-Definition lens_iso' {A B} {AS : Setoid A} {BS : Setoid B}
-           (l : AS ~> BS ~*~ (BS ~~> AS)) f fS (func : @Functor f fS) := injF2 (_lens_iso' l _ _ _) _.
-
-
-
-view l =(fun a => l id a).
-set l = (fun a b => l (const b) a).
-v = l id a.
-s = (fun b => l (const b) a).
-
-
-Hom(Hom(A, -), G) ~ G A
-
-Hom(Hom(F, ~), 
-flip l a <$> (const <$> g (l id a)) == l g a.
-
-          
-(l . const <$> g (l id)) == l g 
-Lemma lens_iso_iso_1 :
-  forall {A B} {AS : Setoid A} {BS : Setoid B}
-         (l : forall f fS (func : @Functor f fS), (BS ~~> fS _ BS) ~> (AS ~~> fS _ AS))
-         f fS (func : @Functor f fS),
-    lens_iso' (lens_iso l) f fS func == l f fS func.
-Proof.
-  intros. simpl. arrequiv. unfold lens_iso, lens_iso', _lens_iso', pairingF. normalize. unfold viewS, view, setS, set. unfold flipS. simpl. normalizecomp. simpl.
-
-
-  
-Lemma flip_lens :
-  forall {A B} {AS : Setoid A} {BS : Setoid B} {f fS} {func : @Functor f fS}
-         (l : forall {f fS} {func : @Functor f fS}, (BS ~~> fS _ BS) ~> (AS ~~> fS _ AS))
-         (f : (BS ~> fS _ BS))
-         (a : A),
-    l @ f @ a =  flipped_lens (@l) a @ f.
-Proof.
-  reflexivity. 
-Qed.
-
-Existing Instance comp_Proper.
-
-Lemma view_comp :
-  forall {A} {B} {C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C}
-         (l : forall {f fS} {func : @Functor f fS}, (BS ~~> fS _ BS) ~> (AS ~~> fS _ AS))
-         (l2 : forall {f fS} {func : @Functor f fS}, (CS ~~> fS _ CS) ~> (BS ~~> fS _ BS)),
-    view (l ∘ l2) == view l2 ∘ view l.
-Proof.
-  intros. unfold view at 1. normalizecomp.  rewrite (flip_lens l). rewrite (flip_lens l). rewrite flip_lens. rewrite flip_lens. unfold comp at 3. unfold eval. repeat rewrite projF_injF. setoid_rewrite eval_injF. normalize. 
-
-Lemma comp_id : forall {A B} {AS : Setoid A} {BS : Setoid B} (f : AS ~> BS), f ∘ idS == f.
-Proof.
-  intros. simpl. arrequiv.
-Qed.
-
-                                           
 Lemma preview_comp :
-  forall {A} {B} {C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C}
-         (l : forall {f fS} {func : @Functor f fS}, (BS ~~> fS _ BS) ~> (AS ~~> fS _ AS))
-         (l2 : forall {f fS} {func : @Functor f fS}, (CS ~~> fS _ CS) ~> (BS ~~> fS _ BS)),
-    preview (l ∘ l2) == preview l >=> preview l2.
+  forall {A} {B} {C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {t tS sett} 
+         {prv : @Preview A B AS BS t tS sett}
+         {t2 t2S sett2}
+         {prv2 : @Preview B C BS CS t2 t2S sett2} (l : t) (l2 : t2),
+    preview @ (l >>>? l2) == preview @ l >=> (preview @ l2 : BS ~> maybeS CS).
 Proof.
-  intros. simpl_equiv. unfold compM, _compM. normalize.  unfold preview.  repeat rewrite comp_eval. simpl bind.  unfold maybe_bind. normalize. unfold ConstMaybeIsoS', ConstIsoS'. normalize. unfold ConstIso'. normalize_monad. unfold preview. normalizecomp. unfold ConstMaybeIsoS'. unfold ConstIsoS', ConstIso'. normalize. rewrite (flip_lens l). rewrite (flip_lens l). unfold comp at 3. unfold eval. repeat rewrite projF_injF. setoid_rewrite eval_injF. normalize. 
- *)
+  intros. simpl. arrequiv. 
+Qed.
 
-(* Definition ASetter' A B {AS : Setoid A} {BS : Setoid B} :=
-  (BS ~~> IdentityS BS) ~> (AS ~~> IdentityS AS).
-
-Definition Getting A B {AS : Setoid A} {BS : Setoid B} :=
-  (BS ~~> ConstS BS BS) ~> (AS ~~> ConstS BS AS). *)

@@ -1,6 +1,6 @@
-Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad Algebra.Maybe Tactics Utils VectorUtils Algebra.Lens.LensTypes Algebra.Pointed.
+Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad Algebra.Maybe Tactics Utils VectorUtils Algebra.Lens.LensTypes Algebra.Pointed FoldableFunctor Monoid MonoidUtils.
 
-Require Import SetoidClass List Coq.Classes.RelationClasses Coq.Arith.PeanoNat Coq.Arith.Compare_dec Coq.Arith.Lt.
+Require Import SetoidClass List Coq.Classes.RelationClasses Coq.Arith.PeanoNat Coq.Arith.Compare_dec Coq.Arith.Lt Coq.Arith.Le Basics.
 
 Import ListNotations.
 
@@ -127,196 +127,244 @@ Proof.
   intros. reflexivity.
 Qed.
 
+Lemma list_update_list_update: forall
+  (A : Type)
+  (AS : Setoid A)
+  n
+  a c
+  (l : list A),  (list_update' n (list_update' n l a) c )  == list_update' n l c .
+Proof.
+  intros.  simpl. apply nat_list_ind_2 with (l1:=n) (l2:=l).
+    - simpl. reflexivity. 
+    - intros. simpl in *. reflexivity. 
+    - intros. simpl in *. reflexivity. 
+    - intros. simpl in *. constructor ; [reflexivity | auto].
+  
+Qed.
+
+
+Lemma list_update_list_nth: forall
+  (A : Type)
+  (AS : Setoid A)
+  n a
+  (l : list A),
+                              nth_error l n == Some a ->
+                              (list_update' n l a)  == l.
+Proof.
+  intros. generalize H. clear H.  apply nat_list_ind_2 with (l1:=n) (l2:=l).
+  - simpl. reflexivity. 
+  - intros.  simpl. constructor. simpl in H0.  symmetry. auto. reflexivity.
+  - intros. simpl in *. reflexivity. 
+  - intros. simpl in *. constructor. reflexivity. auto.  
+Qed.
+
+Lemma list_nth_list_update: forall
+  (A : Type)
+  (AS : Setoid A)
+  n a a'
+  (l : list A),
+                nth_error l n = Some a'
+               ->
+                              nth_error (list_update' n l a) n = Some a.
+Proof.
+  intros. generalize H. clear H.  apply nat_list_ind_2 with (l1:=n) (l2:=l).
+  - simpl. intros. inversion H. 
+  - intros.  simpl.  reflexivity.
+  - intros. simpl in *. inversion H0. 
+  - intros. simpl in *. apply H. auto. 
+Qed.
+
+Lemma list_nth_list_update_diff_index: forall
+  (A : Type)
+  (AS : Setoid A)
+  n n' a
+  (l : list A), 
+  n <> n' ->nth_error (list_update' n l a) n' = nth_error l n'.
+Proof.
+  intros.  generalize H a. clear H. apply nat_list_ind_4 with (l1:=n) (l2:=n')(l3:=l).
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. destruct H0. auto. 
+  - intros. destruct H0. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - exact [].
+Qed.
 
 (* infinite list with finite nonrepeating prefix and an infinitely repeating element *)
 
-Inductive lista A : Type := listaCons : A -> list A -> @lista A.
+Inductive lista A : Type := listaCons : list A -> @lista A.
 
-Fixpoint list_all {A} {AS : Setoid A} (l : list A) (a : A) :=
+Fixpoint list_all {A} {AS : Setoid A} {AP : Pointed A} (l : list A) :=
   match l with
     | nil => True
-    | a' :: l' => a' == a /\ list_all l' a
+    | a' :: l' => a' == point /\ list_all l'
   end.
 
-Fixpoint lista_equiv0 {A} {AS : Setoid A} (a1 a2 : A) (l1 l2 : list A) :=
+Fixpoint lista_equiv0 {A} {AS : Setoid A} {AP : Pointed A} (l1 l2 : list A) :=
   match l1, l2 with
-    | nil, l2' => a1 == a2 /\ list_all l2' a1
+    | nil, l2' => list_all l2'
     | a1' :: l1', nil =>
-      a1' == a2 /\ lista_equiv0 a1 a2 l1' nil
+      a1' == point /\ lista_equiv0 l1' nil
     | a1' :: l1', a2' :: l2' =>
-      a1' == a2' /\ lista_equiv0 a1 a2 l1' l2'
+      a1' == a2' /\ lista_equiv0 l1' l2'
   end
 .
-Lemma lista_equiv0_equiv : forall A (AS : Setoid A) (a1 a2 : A) (l1 l2 : list A), lista_equiv0 a1 a2 l1 l2 -> a1 == a2.
-Proof.
-  intros. generalize H. clear H. apply list_ind_2 with (l1:=l1)(l2:=l2).
-  simpl. tauto.
-  intros. simpl in *. tauto.
-  intros. simpl in *. tauto.
-  intros. simpl in *. tauto.
-Qed.
-
                                
-Definition lista_equiv {A} {AS : Setoid A} (l1 l2 : lista A) :=
+Definition lista_equiv {A} {AS : Setoid A} {AP : Pointed A} (l1 l2 : lista A) :=
   match l1, l2 with
-    | listaCons _ a1 ll1, listaCons _ a2 ll2 => lista_equiv0 a1 a2 ll1 ll2
+    | listaCons _  ll1, listaCons _  ll2 => lista_equiv0  ll1 ll2
   end.
 
-Instance lista_equiv_Equivalence {A} {AS : Setoid A} : Equivalence (@lista_equiv A AS).
+Instance lista_equiv_Equivalence {A} {AS : Setoid A} {AP : Pointed A} : Equivalence (@lista_equiv A AS AP).
 Proof.
   split.
   autounfold. intros. destruct x. simpl. induction l.
-  simpl. split. reflexivity. auto.
+  simpl. auto.
   simpl. split. reflexivity. auto. 
   autounfold. intros. destruct x,y. simpl in *. generalize H. clear H. apply list_ind_2 with (l1:=l) (l2:=l0).
-  intros.   simpl. destruct H. split. symmetry. auto. auto.
-  intros.  simpl. simpl in H0. split.  tauto.  apply H. simpl.  tauto.
-  intros.  simpl. simpl in H0, H. split. apply H. tauto. split. tauto. apply H. tauto.
-  intros. simpl. simpl in H0. split. symmetry. tauto. apply H. tauto.
-  autounfold. intros. destruct x,y,z. simpl in *.  generalize l0 H H0. clear H l0 H0. apply list_ind_2 with (l1:=l) (l2:=l1).
-  intros. simpl in *. split. transitivity a0. tauto. apply lista_equiv0_equiv with (l1:=l0) (l2:=nil). auto. auto. 
-  intros. simpl in *. split. transitivity a0. tauto. apply lista_equiv0_equiv with (l1:=l0) (l2:=a2 :: b). auto. split. destruct l0. simpl in *. transitivity a0. tauto. symmetry. tauto. simpl in *. transitivity a3. symmetry. tauto. tauto. destruct l0.  specialize (H nil). simpl in *.  tauto. specialize (H l0). simpl in *. tauto.
-  intros. simpl in *. split. destruct l0. simpl in *. transitivity a0. tauto. tauto. transitivity a3. tauto. simpl in *. tauto. destruct l0. simpl in *. apply H with (l0:=nil).  tauto. auto. simpl in *. apply H with (l0:=l0). tauto. tauto.
-  intros. simpl in *. split. destruct l0. simpl in *. transitivity a0. tauto. symmetry. tauto. simpl in *. transitivity a3. tauto. tauto. destruct l0. simpl in *. apply H with (l0 := nil). tauto. simpl. tauto. simpl in *. apply H with (l0:=l0). tauto. tauto.
+  intros.   simpl.  auto.
+  intros.  simpl. simpl in H0. tauto. 
+  intros.  simpl. simpl in H0, H. tauto. 
+  intros. simpl. simpl in H0. split. symmetry. tauto. tauto. 
+  autounfold. intros. destruct x,y,z. simpl in *.  generalize H H0. clear H H0. apply list_ind_3 with (l1:=l) (l2:=l0) (l3:=l1).
+  intros. simpl in *. auto.
+  intros. auto.
+  intros. reflexivity.
+  intros. destruct H0, H1. split.  transitivity a. symmetry. auto. auto. apply H. auto. auto.
+  intros. auto.
+  intros. destruct H0, H1. split. transitivity point. auto. symmetry. auto. apply H. auto. auto.
+  intros. destruct H0, H1. split. transitivity c. auto. auto. apply H. auto. auto.
+  intros. destruct H0, H1. split. transitivity c. auto. auto. apply H. auto. auto.
 Qed.
 
-Instance listaS {A} (AS : Setoid A) : Setoid (lista A) :=
+Instance listaS {A} (AS : Setoid A){AP : Pointed A} : Setoid (lista A) :=
   {
     equiv := lista_equiv
   }.
 
-Fixpoint lista_update0 {A} {AS : Setoid A} (n:nat) (a0 : A) (l:list A)  (a:A ) {struct n} :  list A :=
+Fixpoint lista_update0 {A} {AS : Setoid A} {AP : Pointed A} (n:nat) (l:list A)  (a:A ) {struct n} :  list A :=
   match n, l with
     | 0, [] => [a] 
     | 0, a'::l' => a ::l'
-    | S n', [] => a0 :: lista_update0 n' a0 [] a
-    | S n', a'::l' => a':: lista_update0 n' a0 l' a
+    | S n', [] => point  :: lista_update0 n'  [] a
+    | S n', a'::l' => a':: lista_update0 n'  l' a
   end.
 
 
-Instance lista_update0_Proper A (AS : Setoid A): Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv) (@lista_update0 A AS).
+Instance lista_update0_Proper A (AS : Setoid A) (AP : Pointed A): Proper (equiv ==> equiv ==> equiv ==> equiv) (@lista_update0 A AS AP).
 Proof.
-  autounfold. intros. rewrite H.  clear x H. generalize y H1. clear y H1. apply list_ind_2 with (l1:=x1) (l2:=y1).
+  autounfold. intros. rewrite H.  clear x H. generalize y H0. clear y H0. apply list_ind_2 with (l1:=x0) (l2:=y0).
   intros. induction y.
   simpl.  constructor. auto. auto. 
-  simpl.  constructor. auto. auto. 
-  intros. inversion H1.
-  intros. inversion H1.
-  intros. inversion H1. induction y.
+  simpl.  constructor. reflexivity. auto. 
+  intros.  inversion H0.
+  intros. inversion H0.
+  intros. inversion H0. induction y.
   simpl.  constructor.  auto. auto. 
   simpl. constructor. auto. apply H. auto. 
 Qed.
 
-Definition lista_update {A} {AS : Setoid A} (n:nat) (l:lista A)  (a:A )  :  lista A :=
+Definition lista_update {A} {AS : Setoid A} {AP : Pointed A} (n:nat) (l:lista A)  (a:A )  :  lista A :=
   match l with
-    | listaCons _ a0 l => listaCons _ a0 (lista_update0 n a0 l a)
+    | listaCons _  l => listaCons _  (lista_update0 n  l a)
   end.
 
 Hint Unfold lista_update.
 
-Instance listaCons_Proper A (AS : Setoid A): Proper (equiv ==> equiv ==> equiv) (@listaCons A).
-Proof.
-  autounfold. intros. simpl. generalize H0. clear H0. apply list_ind_2 with (l1:=x0) (l2:=y0).
-  simpl. auto.
-  intros. inversion H1.
-  intros. inversion H1.
-  intros. inversion H1. simpl. tauto.
-Qed.
 
-Definition listaConsS {A} {AS : Setoid A} := injF2 (@listaCons A) _.
-Lemma listaCons_equiv : forall A (AS : Setoid A) (a1 a2 : A) (l1 l2 : list A), listaCons _ a1 l1 == listaCons _ a2 l2 -> a1 == a2.
+Instance lista_update_Proper A (AS : Setoid A) (AP : Pointed A): Proper (equiv ==> equiv ==> equiv ==> equiv) (@lista_update A AS AP).
 Proof.
-  intros. generalize H. clear H. apply list_ind_2 with (l1:=l1)(l2:=l2).
-  simpl. tauto.
-  intros. apply H. simpl in *. tauto.
-  intros. apply H. simpl in *. tauto.
-  intros. apply H. simpl in *. tauto.
-Qed.
-
-Instance lista_update_Proper A (AS : Setoid A): Proper (equiv ==> equiv ==> equiv ==> equiv) (@lista_update A AS).
-Proof.
-  autounfold. intros. destruct x0, y0.  rewrite H, H1. clear x H x1 H1. generalize y H0. clear y H0. apply list_ind_2 with (l1:=l) (l2:=l0).
+  autounfold. intros. destruct x0, y0.  rewrite H. clear x H. generalize y H0. clear y H0. apply list_ind_2 with (l1:=l) (l2:=l0).
   intros. induction y.
-  simpl in *.   split. reflexivity. tauto. 
-  simpl in *.  tauto. 
+  simpl in *.   split. auto. auto. 
+  simpl in *.  split. reflexivity. auto. 
   intros. destruct y.
-  simpl in *. split. reflexivity. tauto.
+  simpl in *. split. auto.  tauto.
   simpl. simpl in H0.  split.   symmetry. tauto. apply H.  simpl. tauto.
   intros. destruct y.
-  simpl in *. split. reflexivity. tauto.
+  simpl in *. split. auto.  tauto.
   simpl. simpl in H0. split. tauto. simpl in *. apply H. tauto. 
   intros. destruct y.
-  simpl in *. split. reflexivity. tauto.
+  simpl in *. split. auto.  tauto.
   simpl in *. split. tauto. apply H. tauto.
 Qed.
 
-Definition lista_updateS {A} {AS : Setoid A} := injF3 (@lista_update A AS) _.
+Definition lista_updateS {A} {AS : Setoid A} {AP : Pointed A} := injF3 (@lista_update A AS AP) _.
 
-Fixpoint lista_truncate0 {A} {AS : Setoid A} n  (a0 : A) (l : list A) :=
+Instance listaCons_Proper A (AS : Setoid A) (AP : Pointed A): Proper (equiv ==> equiv) (@listaCons A).
+Proof.
+  autounfold. intros. simpl. generalize H. clear H. apply list_ind_2 with (l1:=x ) (l2:=y ).
+  simpl. auto.
+  intros. inversion H0.
+  intros. inversion H0.
+  intros. inversion H0. simpl. tauto.
+Qed.
+
+Definition listaConsS {A} {AS : Setoid A} {AP :Pointed A}:= injF  (@listaCons A) _.
+
+Fixpoint lista_truncate0 {A} {AS : Setoid A} {AP : Pointed A} n   (l : list A) :=
   match n, l with
     | 0, _ => []
-    | S n', [] => a0 :: lista_truncate0 n' a0 []
-    | S n', a' :: l' => a' :: lista_truncate0 n' a0 l'
+    | S n', [] => []
+    | S n', a' :: l' => a' :: lista_truncate0 n' l'
   end
 .
 
-Definition lista_truncate {A} {AS : Setoid A} n (a : A) (la : lista A) :=
+Definition lista_truncate {A} {AS : Setoid A} {AP : Pointed A} n (la : lista A) :=
   match la with
-    | listaCons _ a0 l => listaCons _ a (lista_truncate0 n a0 l)
+    | listaCons _  l => listaCons _  (lista_truncate0 n l)
   end
 .
 
-Instance lista_truncate_Proper A (AS : Setoid A): Proper (equiv ==> equiv ==> equiv ==> equiv) (@lista_truncate A AS).
+Instance lista_truncate_Proper A (AS : Setoid A) (AP : Pointed A) : Proper (equiv ==> equiv ==> equiv) (@lista_truncate A AS AP).
 Proof.
-  autounfold. intros. rewrite H. clear x H. destruct x1, y1. generalize y H1. clear y H1. apply list_ind_2 with (l1:=l) (l2:=l0).
-  intros. simpl in H1. induction y.
+  autounfold. intros. rewrite H. clear x H. destruct x0, y0. generalize y H0. clear y H0. apply list_ind_2 with (l1:=l) (l2:=l0).
+  intros. simpl in H0. induction y.
   simpl. tauto.
   simpl. tauto. 
   intros. destruct y.
-  simpl in *. split. eauto using lista_equiv0_equiv. auto.
-  simpl in *. split. symmetry.  tauto. apply H. tauto.
+  simpl in *.  auto.
+  simpl in *. split. tauto.  specialize (H y). destruct y. simpl. auto.   apply H. tauto. 
   intros. destruct y.
-  simpl in *. split. eauto using lista_equiv0_equiv. auto.
-  simpl in *. split. tauto. apply H. tauto. 
+  simpl in *. auto. 
+  simpl in *. split. tauto.  specialize (H y). destruct y. simpl. auto . apply H. tauto. 
   intros. destruct y.
-  simpl in *. split. eauto using lista_equiv0_equiv. auto.
+  simpl in *. auto. 
   simpl in *. split. tauto. apply H. tauto.
 Qed.
 
-Definition lista_truncateS {A} {AS : Setoid A} := injF3 (@lista_truncate A AS) _.
+Definition lista_truncateS {A} {AS : Setoid A} {AP : Pointed A} := injF2 (@lista_truncate A AS AP) _.
 
-Lemma lista_equiv_lista_truncate: forall A (AS : Setoid A) n (a1 a2:A) (l1 l2 :lista A),
-                                       lista_truncate n a1 l1 == lista_truncate n a1 l2 ->
-                                       lista_truncate n a2 l1 == lista_truncate n a2 l2.
-Proof.
-  destruct l1, l2. generalize l l0. clear l l0. induction n.
-  simpl. intros. split. reflexivity. auto.
-  intros. destruct l, l0.
-  simpl in *. split. tauto. apply IHn. tauto.
-  simpl in *. split. tauto. apply IHn. tauto.
-  simpl in *. split. tauto. apply IHn. tauto.
-  simpl in *. split. tauto. apply IHn. tauto.
-Qed.
 
 Lemma lista_truncate_lista_update  :
-  forall {A} {AS : Setoid A} n (a : A)(a0:A )(n0:nat) (l1 l2:lista A),
-    lista_truncate n a l1 == lista_truncate n a l2 ->
-    lista_truncate n a (lista_updateS @ n0 @ l1 @ a0) == lista_truncate n a (lista_updateS @ n0 @ l2 @ a0).
+  forall {A} {AS : Setoid A}{AP :Pointed A} n (a0:A )(n0:nat) (l1 l2:lista A),
+    lista_truncate n  l1 == lista_truncate n  l2 ->
+    lista_truncate n  (lista_updateS @ n0 @ l1 @ a0) == lista_truncate n  (lista_updateS @ n0 @ l2 @ a0).
 Proof.
   destruct l1, l2. generalize n n0. clear n n0. apply list_ind_2 with (l1:=l) (l2:=l0).
+  intros. reflexivity.
   intros. destruct n.
   simpl. auto.
-  destruct H. rewrite H. reflexivity. 
+  destruct H0. destruct n0. 
+  simpl. split. reflexivity.  destruct n. simpl. auto. simpl.  destruct b. auto. auto. 
+  simpl. split. symmetry. auto. apply H. simpl. destruct n.  simpl. auto. destruct b. auto. auto. 
   intros. destruct n.
   simpl. auto.
   destruct H0. destruct n0.
-  simpl. split. reflexivity. auto.
-  simpl. split. auto. apply H. auto.
-  intros. destruct n.
-  simpl. auto.
-  destruct H0. destruct n0.
-  simpl.  split. reflexivity. auto.
-  simpl. split. auto. apply H. auto.
+  simpl.  split. reflexivity.  destruct n. simpl. auto. simpl.  destruct b. auto. auto. 
+  simpl. split. auto. apply H. destruct n.  simpl. auto. destruct b. reflexivity.
+  simpl. destruct H1.  auto . 
   intros. destruct n.
   simpl. auto.
   destruct H0. destruct n0.
@@ -324,185 +372,250 @@ Proof.
   simpl. split. auto. apply H. auto.
 Qed.
 
-Fixpoint lista_zipWith0_right {A : Type} {AS : Setoid A} {B : Type} {BS : Setoid B} (f : AS ~> BS ~~> AS) (a : A)  (lb : list B) :=
+Class PointedFunction2 {A B C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {AP :Pointed A} {BP :Pointed B} {CP : Pointed C} (f : AS ~> BS ~~> CS) :=
+  {
+    pointed2 : f @ point @ point == point
+  }
+.
+
+Fixpoint lista_zipWith0_right {A : Type} {AS : Setoid A} {AP : Pointed A} {B : Type} {BS : Setoid B} {BP : Pointed B} (f : AS ~> BS ~~> AS) {pointed: PointedFunction2 f} (lb : list B) :=
   match lb with
     | [] => []
-    | b' :: lb' => (f @ a @ b') :: lista_zipWith0_right f a lb'
+    | b' :: lb' => (f @ point @ b') :: lista_zipWith0_right f lb'
   end
 .
 
-Fixpoint lista_zipWith0 {A : Type} {AS : Setoid A} {B : Type} {BS : Setoid B} (f : AS ~> BS ~~> AS) (a : A) (la : list A) (b : B) (lb : list B) :=
+Fixpoint lista_zipWith0 {A : Type} {AS : Setoid A} {AP : Pointed A} {B : Type} {BS : Setoid B} {BP : Pointed B} (f : AS ~> BS ~~> AS) {pointed : PointedFunction2 f} (la : list A)  (lb : list B) :=
   match la, lb with
-    | [] , _ => lista_zipWith0_right f a lb
-    | a' :: la', [] => (f @ a' @ b) :: lista_zipWith0 f a la' b []
-    | a' :: la', b' :: lb' => (f @ a' @ b') :: lista_zipWith0 f a la' b lb'
+    | [] , _ => lista_zipWith0_right f lb
+    | a' :: la', [] => (f @ a' @ point) :: lista_zipWith0 f la' []
+    | a' :: la', b' :: lb' => (f @ a' @ b') :: lista_zipWith0 f la' lb'
   end
 .
-Definition lista_zipWith {A : Type} {AS : Setoid A} {B : Type} {BS : Setoid B} (f : AS ~> BS ~~> AS) (la : lista A) (lb : lista B) :=
+Definition lista_zipWith {A : Type} {AS : Setoid A} {AP : Pointed A} {B : Type} {BS : Setoid B} {BP : Pointed B} (f : AS ~> BS ~~> AS) {pointed : PointedFunction2 f} (la : lista A) (lb : lista B) :=
   match la, lb with
-    | listaCons _ a la' , listaCons _ b lb' => listaCons _ (f @ a @ b) (lista_zipWith0 f a la' b lb')
+    | listaCons _ la' , listaCons _ lb' => listaCons _ (lista_zipWith0 f  la' lb')
   end
 .
 
 
-Instance lista_zipWith_Proper {A : Type} {AS : Setoid A}{B : Type} {BS : Setoid B} : Proper (equiv ==> equiv ==> equiv ==> equiv) (@lista_zipWith A _ B _).
+Instance lista_zipWith_Proper {A : Type} {AS : Setoid A} {AP :Pointed A} {B : Type} {BS : Setoid B}{BP : Pointed B}  (f : AS ~> BS ~~> AS) {pointed : PointedFunction2 f}  : Proper ( equiv ==> equiv ==> equiv) (@lista_zipWith A _ _ B _ _ f pointed).
 Proof.
-  autounfold. intros. destruct x0,y0,x1,y1. generalize H0 l1 l2 H1. clear H0 l1 l2 H1. apply list_ind_2 with (l1:=l) (l2:=l0).
-  - intros. destruct H0. unfold lista_zipWith.   simpl. generalize H1. clear H1. apply list_ind_2 with (l1:=l1) (l2:=l2).
-    + simpl. split. destruct H1. rewritesr. auto.
-    + intros. simpl in H1, H3. split. tauto. split.  destruct H3 as [? [? ?]]. rewritesr. tauto.
-    + intros. simpl in H1, H3. split. destruct H3. rewritesr. tauto.
-    + intros. simpl in H1, H3. split. destruct H3. rewritesr. tauto.
-  - intros. destruct l1, l2.
-    + simpl in H0, H1, H2. destruct H1 as [? [? ?]]. destruct H2. split. rewritesr. split. rewritesr. clear l l0 a1 H0 H1 H3 H5. induction b1.
-      * auto.
-      * simpl. destruct H4. split. rewritesr. apply IHb1. auto.
-    + simpl in H0, H1, H2. destruct H1 as [? [? ?]], H2 as [? [? ?]]. split. rewritesr. split. rewritesr. clear l l0 a1 H0 H3 H5. generalize H4 H6. clear H4 H6. apply list_ind_2' with (l1:=b1) (l2:=l2).
-      * simpl.  auto.
-      * intros. destruct H6. split. rewritesr. auto.
-      * intros. destruct H4. split. rewritesr. auto.
-      * intros. destruct H4, H6. split. rewritesr. auto.
-    + simpl in H0, H1, H2. destruct H1 as [? [? ?]], H2. split. rewritesr. apply H0. tauto. auto. 
-    + simpl in H0, H1, H2. destruct H1 as [? [? ?]], H2. split. rewritesr. apply H0. tauto. auto.
-  - intros. destruct l1, l2.
-    + simpl in H0, H1, H2. destruct H1, H2. split. rewritesr. apply (H0 H3 [] []). simpl. auto. 
-    + simpl in H0, H1, H2. destruct H1, H2 as [? [? ?]]. split. rewritesr. apply H0. auto. simpl. auto. 
-    + simpl in H0, H1, H2. destruct H1, H2. split. rewritesr. apply (H0 H3 l1 []). auto. 
-    + simpl in H0, H1, H2. destruct H1, H2. split. rewritesr. apply H0. auto. auto.
-  - intros. destruct l1, l2.
-    + simpl in H0, H1, H2. destruct H1, H2. split. rewritesr. apply H0. auto. simpl. auto. 
-    + simpl in H0, H1, H2. destruct H1, H2 as [? [? ?]]. split. rewritesr. apply H0. auto. simpl. auto.
-    + simpl in H0, H1, H2. destruct H1, H2. split. rewritesr. apply H0. auto.  auto.
-    + simpl in H0, H1, H2. destruct H1, H2. split. rewritesr. apply H0. auto. auto.
+  autounfold. intros. destruct x,y,x0,y0. generalize  H  H0. clear H  H0. apply list_ind_4' with (l1:=l) (l2:=l0) (l3:=l1) (l4:=l2).
+  
+  - auto.
+  - intros. simpl in *.  destruct H1. split.
+    + rewrite H1.  rewrite pointed2. reflexivity.
+    + auto.
+  - intros. simpl in *.  destruct H1. split.
+    + rewrite H1.  rewrite pointed2. reflexivity.
+    + auto.
+  - intros. simpl in *. destruct H1. split.
+    + rewrite H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0. split.
+    + rewrite H0.  rewrite pointed2. reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  rewrite pointed2. reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0. split.
+    + rewrite H0.  rewrite pointed2. reflexivity. 
+    + auto.
+  - intros. simpl in *.  destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *.  destruct H0, H1. split.
+    + rewrite H0, H1.  rewrite pointed2. reflexivity.
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0. split.
+    + rewrite H0.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
+  - intros. simpl in *. destruct H0, H1. split.
+    + rewrite H0, H1.  reflexivity. 
+    + auto.
 Qed.
 
 
-Definition lista_zipWithS {A : Type} {AS : Setoid A} {B : Type} {BS : Setoid B} := injF3 (@lista_zipWith A _ B _) _.
+Definition lista_zipWithS {A : Type} {AS : Setoid A} {AP : Pointed A} {B : Type} {BS : Setoid B} {BP : Pointed B} f {poi} := injF2 (@lista_zipWith A _ _ B _ _ f poi) _.
 
 
-Definition lista_map  {A : Type} {AS : Setoid A} {B : Type} {BS : Setoid B} (f : AS ~> BS) (la : lista A) :=
+Class PointedFunction {A B } {AS : Setoid A} {BS : Setoid B}  {AP :Pointed A} {BP :Pointed B}  (f : AS ~> BS) :=
+  {
+    pointed : f @ point  == point
+  }
+.
+
+Definition lista_map  {A : Type} {AS : Setoid A} {AP : Pointed A}{B : Type} {BS : Setoid B} {BP : Pointed B}(f : AS ~> BS) (poi : PointedFunction f) (la : lista A) :=
   match la with
-    | listaCons _ a la' => listaCons _ (f @ a) (mapS @ f @ la')
+    | listaCons _ la' => listaCons _ (mapS @ f @ la')
   end
 .
 
-Instance lista_map_Proper {A : Type} {AS : Setoid A}{B : Type} {BS : Setoid B} : Proper (equiv ==> equiv ==> equiv) (@lista_map A _ B _).
+Instance lista_map_Proper {A : Type} {AS : Setoid A} AP {B : Type} {BS : Setoid B} BP f poi : Proper (equiv ==> equiv) (@lista_map A _ AP B _ BP f poi) .
 Proof.
-  autounfold. intros. destruct x0,y0. unfold lista_map.  rewrite H. clear x H.  generalize H0 . clear H0 . apply list_ind_2 with (l1:=l) (l2:=l0).
-  - intros. destruct H0. rewritesr.
-  - intros. destruct H0, H1. split. rewritesr. split. rewritesr. simpl in H. apply H. tauto.
-  - intros. destruct H0. split. rewritesr. simpl in H. apply H. auto. 
-  - intros. destruct H0. split. rewritesr. simpl in H. apply H. auto.  
+  autounfold. intros. destruct x,y. unfold lista_map.   generalize H . clear H . apply list_ind_2 with (l1:=l) (l2:=l0).
+  - intros. destruct H. rewritesr.
+  - intros. destruct H0. split. rewrite H0. apply pointed.  simpl in H. auto. 
+  - intros. destruct H0. split. rewrite H0. apply pointed. simpl in H. auto. 
+  - intros. destruct H0. split. rewritesr. simpl in H. auto. 
 Qed.
 
-Definition lista_mapS  {A : Type} {AS : Setoid A}{B : Type} {BS : Setoid B}:= injF2 (@lista_map A AS B BS) _.
+Definition lista_mapS  {A : Type} {AS : Setoid A}{AP}{B : Type} {BS : Setoid B}{BP} f {poi}:= injF (@lista_map A AS AP B BS BP f poi) _.
 
-Definition lista_nth {A : Type} {AS : Setoid A} n (l : lista A) :=
+Definition lista_nth {A : Type} {AS : Setoid A}{AP : Pointed A}  n (l : lista A) :=
   match l with
-    | listaCons _ a l' => nth n l' a
+    | listaCons _ l' => nth n l' point
   end
 .
-Instance lista_nth_Proper {A : Type} {AS : Setoid A} : Proper (equiv ==> equiv ==> equiv) lista_nth.
+Instance lista_nth_Proper {A : Type} {AS : Setoid A} AP : Proper (equiv ==> equiv ==> equiv) (@lista_nth A AS AP).
 Proof.
   autounfold. intros. destruct x0, y0. simpl. rewrite H. clear x H. generalize y H0. clear y H0. apply list_ind_2 with (l1:=l) (l2:=l0).
-  - simpl. destruct y. tauto. tauto.
-  - intros.  destruct H0. destruct H1. simpl. destruct y. rewritesr. rewrite <- H. simpl. destruct y. reflexivity. reflexivity. simpl. auto.
+  - simpl. destruct y. reflexivity. reflexivity.
+  - intros.  destruct H0.  simpl. destruct y. rewritesr. rewrite <- H. simpl. destruct y. reflexivity. reflexivity. simpl. auto.
   - intros.  destruct H0. simpl. destruct y. rewritesr. rewrite H. simpl. destruct y. reflexivity. reflexivity. simpl. auto.
   - intros.  destruct H0. simpl. destruct y. rewritesr. apply H. simpl.  auto.
 Qed.
 
-Definition lista_nthS {A : Type} {AS : Setoid A} := injF2 (@lista_nth A AS) _.
+Definition lista_nthS {A : Type} {AS : Setoid A} {AP} := injF2 (@lista_nth A AS AP) _.
 
-Definition _listaNthLens' {A : Type} {AS : Setoid A} (n : nat) : _Lens' (lista A) A.
-  unfold _Lens'. intros. refine (lista_updateS @ n @ X0 <$> (X @ (lista_nthS @ n @ X0))).
-Defined.
-
-Definition _listaNthLens {f fS} {func : @Functor f fS} {A : Type} {AS : Setoid A} (n : nat) :=
-  @_listaNthLens' A AS n f fS func.
-
-Instance _listaNthLens_Proper {f fS} {func : @Functor f fS} {A : Type} {AS : Setoid A}(n : nat): Proper (equiv ==> equiv ==> equiv ) (@_listaNthLens f fS func A AS n).
-Proof.
-  autounfold. intros. unfold _listaNthLens, _listaNthLens'. rewritesr.
-Qed.
-
-Definition listaNthLens {f fS} {func : @Functor f fS} {A} {AS : Setoid A} (n : nat) :=
-  injF2 (@_listaNthLens f fS func A AS n) _.
-
-Fixpoint list_findn {A : Type} {AS : Setoid A} (p : AS ~> boolS) (a : A) (l : list A)  (n : nat) : maybe nat :=
+Fixpoint list_findn {A : Type} {AS : Setoid A} {AP : Pointed A} (p : AS ~> boolS) (l : list A)  (n : nat) : maybe nat :=
   match l with
-    | [] => if p @ a then Some n else None
-    | a' :: l' => if p @ a' then Some n else list_findn p a l' (S n)
+    | [] => if p @ point then Some n else None
+    | a' :: l' => if p @ a' then Some n else list_findn p l' (S n)
   end
 .
 
-Definition lista_find {A : Type} {AS : Setoid A} (p : AS ~> boolS) (l : lista A) : maybe nat :=
+Definition lista_find {A : Type} {AS : Setoid A} {AP : Pointed A} (p : AS ~> boolS) (l : lista A) : maybe nat :=
   match l with
-    | listaCons _ a' l' => list_findn p a' l' 0
+    | listaCons _ l' => list_findn p l' 0
   end
 .
 
-Instance lista_find_Proper {A : Type} {AS : Setoid A}: Proper (equiv ==> equiv ==> equiv ) (@lista_find A AS).
+Instance lista_find_Proper {A : Type} {AS : Setoid A} AP: Proper (equiv ==> equiv ==> equiv ) (@lista_find A AS AP).
 Proof.
   autounfold. intros. destruct x0, y0.  unfold lista_find. generalize 0 H0. clear H0. apply list_ind_2 with (l1:=l) (l2:=l0).
   - intros. destruct H0.  match goal with
       | |- ?a == ?b => simpl a; simpl b
-    end. matchequiv.  inversion H2. inversion H2. 
-  - intros. destruct H1 as [? [? ?]].
-    match goal with
-      | |- ?a == ?b => simpl a; simpl b
-    end. rewrite H , H2. assert (y @ a = true \/ y @ a = false). destruct (y @ a). tauto. tauto. destruct H4. rewrite H4. reflexivity.  rewrite H4. rewrite <- H0. simpl. rewrite <- H in H4. rewrite H4. auto. simpl.   auto.
+    end. matchequiv.  inversion H0. inversion H0. 
   - intros. destruct H1 as [? ?].
     match goal with
       | |- ?a == ?b => simpl a; simpl b
-    end. rewrite H , H1. assert (y @ a0 = true \/ y @ a0 = false). destruct (y @ a0). tauto. tauto. destruct H3. rewrite H3. reflexivity.  rewrite H3. rewrite H0. simpl. rewrite H3. auto. simpl.   auto.
+    end. rewrite H , H1. assert (y @ point = true \/ y @ point = false). destruct (y @ point). tauto. tauto. destruct H3. rewrite H3. reflexivity.  rewrite H3. rewrite <- H0. simpl. rewrite <- H in H3. rewrite H3. auto. simpl.   auto.
+  - intros. destruct H1 as [? ?].
+    match goal with
+      | |- ?a == ?b => simpl a; simpl b
+    end. rewrite H , H1. assert (y @ point = true \/ y @ point = false). destruct (y @ point). tauto. tauto. destruct H3. rewrite H3. reflexivity.  rewrite H3. rewrite H0. simpl. rewrite H3. reflexivity.   simpl.   auto.
   - intros. destruct H1 as [? ?].
     match goal with
       | |- ?a == ?b => simpl a; simpl b
     end. rewrite H , H1. assert (y @ c = true \/ y @ c = false). destruct (y @ c). tauto. tauto. destruct H3. rewrite H3. reflexivity.  rewrite H3. apply H0. auto. 
 Qed.
 
-Definition lista_findS {A} {AS : Setoid A} :=
-  injF2 (@lista_find A AS) _.
+Definition lista_findS {A} {AS : Setoid A} {AP} :=
+  injF2 (@lista_find A AS AP) _.
 
 
-Fixpoint list_findan {A : Type} {AS : Setoid A} (d : forall a a' : A, {a==a'} + {~a==a'}) (a : A) (l : list A)  (n : nat) :  nat :=
+Fixpoint list_findan {A : Type} {AS : Setoid A} {AP : Pointed A} (d : forall a a' : A, {a==a'} + {~a==a'}) (l : list A)  (n : nat) :  nat :=
   match l with
     | [] =>  n
-    | a' :: l' => if d a a' then  n else list_findan d a l' (S n)
+    | a' :: l' => if d point a' then  n else list_findan d l' (S n)
   end
 .
 
-Definition lista_finda {A : Type} {AS : Setoid A} (d : forall a a' : A, {a==a'} + {~a==a'}) (l : lista A) :  nat :=
+Definition lista_finda {A : Type} {AS : Setoid A} {AP : Pointed A} (d : forall a a' : A, {a==a'} + {~a==a'}) (l : lista A) :  nat :=
   match l with
-    | listaCons _ a' l' => list_findan d a' l' 0
+    | listaCons _ l' => list_findan d l' 0
   end
 .
 
-Instance lista_finda_Proper {A : Type} {AS : Setoid A} d: Proper (equiv ==> equiv ) (@lista_finda A AS d).
+Instance lista_finda_Proper {A : Type} {AS : Setoid A} AP d: Proper (equiv ==> equiv ) (@lista_finda A AS AP d).
 Proof.
   autounfold. intros. destruct x, y.  unfold lista_finda. generalize 0 H. clear H. apply list_ind_2 with (l1:=l) (l2:=l0).
   - intros. simpl. auto. 
-  - intros. destruct H0 as [? [? ?]].
-    simpl. destruct (d a0 a1). reflexivity.  rewrite H1 in n0. symmetry in H0. tauto.
+  - intros. destruct H0 as [? ?].
+    simpl. destruct (d point a). reflexivity.  symmetry in H0. tauto.
     
   - intros. destruct H0 as [? ?].
-    simpl. destruct (d a a1). reflexivity.  pose (listaCons_equiv _ _ a a0 b [] H1). rewrite H0 in n0. tauto.
+    simpl. destruct (d point a). reflexivity. symmetry in H0. tauto. 
   - intros. destruct H0 as [? ?].
     match goal with
       | |- ?a == ?b => simpl a; simpl b
-    end. pose (listaCons_equiv _ _ a a0 b d0 H1). destruct (d a a1), (d a0 c). reflexivity. rewrite <- e, <- H0 in n0. tauto. rewrite <- e, <- H0 in e0. tauto. apply H. auto. 
+    end.  destruct (d point a ), (d point c). reflexivity. rewrite <- H0 in n0. tauto. rewrite H0 in n0. tauto. apply H. auto. 
 Qed.
 
-Definition lista_findaS {A} {AS : Setoid A} d :=
-  injF (@lista_finda A AS d) _.
+Definition lista_findaS {A} {AS : Setoid A} {AP} d :=
+  injF (@lista_finda A AS AP d) _.
 
-Definition lista_repeat {A : Type} {AS : Setoid A} (a : A) := listaCons _ a [].
-Instance lista_repeat_Proper {A : Type} {AS : Setoid A} : Proper (equiv ==> equiv ) (@lista_repeat A AS).
+Definition lista_repeat {A : Type} {AS : Setoid A} {AP : Pointed A} := listaCons A [].
+
+Fixpoint list_filter' {A : Type} {AS : Setoid A} (l : list (maybe A)) : list A :=
+  match l with
+    | [] => []
+    | a' :: l' => match a' with
+                    | Some n => n :: list_filter' l'
+                    | None => list_filter' l'
+                  end
+  end
+.
+
+Instance list_filter'_Proper {A : Type} {AS : Setoid A} : Proper (equiv ==> equiv ) (@list_filter' A AS).
 Proof.
-  autounfold. intros. simpl. auto.
+  autounfold. intros. generalize H. clear H. apply list_ind_2 with (l1:=x) (l2:=y).
+  - intros. reflexivity. 
+  - intros. inversion H0.
+  - intros. inversion H0. 
+  - intros. 
+    simpl. inversion H0.  destruct a, c.
+    + constructor. auto. apply H. auto. 
+    + inversion H4.
+    + inversion H4.
+    + apply H. auto. 
 Qed.
 
-Definition lista_repeatS {A : Type} {AS : Setoid A} := injF (@lista_repeat A AS) _.
+Definition lista_filter' {A : Type} {AS : Setoid A} (l : lista (maybe A)) : list A :=
+  match l with
+    | listaCons _ l' => list_filter' l'
+  end
+.
+
+Instance lista_filter'_Proper {A : Type} {AS : Setoid A} : Proper (equiv ==> equiv ) (@lista_filter' A AS).
+Proof.
+  autounfold. intros. destruct x, y.  unfold lista_filter'. generalize H. clear H. apply list_ind_2 with (l1:=l) (l2:=l0).
+  - intros. reflexivity. 
+  - intros. destruct H0 as [? ?].
+    simpl. destruct a.
+    + simpl in H0. inversion H0.
+    + apply H. apply H1. 
+  - intros. destruct H0 as [? ?].
+    destruct a.
+    + inversion H0.
+    + apply H. apply H1.
+  - intros. destruct H0 as [? ?].
+    simpl. destruct a, c.
+    + constructor. auto. apply H. apply H1.
+    + inversion H0.
+    + inversion H0.
+    + apply H. apply H1.
+Qed.
+
+Definition lista_filterS' {A} {AS : Setoid A}  :=
+  injF (@lista_filter' A AS) _.
 
 Fixpoint list_filter_index {A : Type} {AS : Setoid A} (p : AS ~> boolS) (l : list A) n : list nat :=
   match l with
@@ -511,32 +624,37 @@ Fixpoint list_filter_index {A : Type} {AS : Setoid A} (p : AS ~> boolS) (l : lis
   end
 .
 
-Definition lista_filter_index {A : Type} {AS : Setoid A} (p : AS ~> boolS) (l : lista A) : list nat :=
+Definition lista_filter_index {A : Type} {AS : Setoid A} {AP : Pointed A} (p : AS ~> boolS) (l : lista A) : list nat :=
   match l with
-    | listaCons _ a' l' => if (p @ a') then [] else list_filter_index p l' 0
+    | listaCons _ l' => if (p @ point) then [] else list_filter_index p l' 0
   end
 .
 
-Instance lista_filter_index_Proper {A : Type} {AS : Setoid A}: Proper (equiv ==> equiv ==> equiv ) (@lista_filter_index A AS).
+
+Instance lista_filter_index_Proper {A : Type} {AS : Setoid A} AP: Proper (equiv ==> equiv ==> equiv ) (@lista_filter_index A AS AP).
 Proof.
   autounfold. intros. destruct x0, y0.  unfold lista_filter_index. generalize 0 H0. clear H0. apply list_ind_2 with (l1:=l) (l2:=l0).
   - intros. destruct H0. simpl. matchequiv.  
-  - intros. destruct H1 as [? [? ?]].
-    match goal with
-      | |- ?a == ?b => simpl a; simpl b
-    end. rewrite H , <- H1, H2. assert (y @ a = true \/ y @ a = false). destruct (y @ a). tauto. tauto. destruct H4. rewrite H4. reflexivity.  rewrite H4. rewrite <- H in H4. rewrite H4 in H0. rewrite H, H1 in H4. rewrite H4 in H0. rewrite <- H0. simpl. auto.  simpl.   auto.
   - intros. destruct H1 as [? ?].
     match goal with
       | |- ?a == ?b => simpl a; simpl b
-    end.  pose (listaCons_equiv _ _ a a0 b [] H2).   assert (x @ a = true \/ x @ a = false). destruct (x @ a). tauto. tauto. destruct H3. rewrite H3. rewrite H, e in H3. rewrite H3. reflexivity.  rewrite H3. rewrite e, <- H1 in H3. rewrite H3. rewrite H1 , <- e in H3. rewrite H3 in H0. rewrite H, e in H3. rewrite H3 in H0. rewrite H0. simpl. rewrite H3. auto. simpl.   auto.
+    end. rewrite H , <- H1. assert (y @ a = true \/ y @ a = false). destruct (y @ a). tauto. tauto. destruct H3. rewrite H3. reflexivity.  rewrite H3. specialize (H0 (S n)). rewrite <- H1 in H0. rewrite H3 in H0. rewrite <- H in H3. rewrite H3 in H0. rewrite <- H0. simpl. auto.  simpl.   auto.
   - intros. destruct H1 as [? ?].
     match goal with
       | |- ?a == ?b => simpl a; simpl b
-    end.  pose (listaCons_equiv _ _ a a0 b d H2). assert (x @ a = true \/ x @ a = false). destruct (x @ a). tauto. tauto. destruct H3. rewrite H3 in *. rewrite H, e in H3. rewrite H3 in *. auto.   rewrite H3 in *. rewrite H, H1. rewrite H, e in H3. rewrite H3 in *. destruct (y @ c). constructor. reflexivity. apply H0. auto.  apply H0. auto.
+    end. rewrite H1.     assert (x @ point = true \/ x @ point = false). destruct (x @ point). tauto. tauto. destruct H3. rewrite H3. rewrite H3 in *.  rewrite H in H3. rewrite H3 in *. reflexivity.  rewrite H3 in *. rewrite  H in H3. rewrite H3 in *. apply H0. auto. 
+  - intros. destruct H1 as [? ?].
+    match goal with
+      | |- ?a == ?b => simpl a; simpl b
+    end.  assert (x @ a = true \/ x @ a = false). destruct (x @ a). tauto. tauto. destruct H3. rewrite H, H1 in *. rewrite H3 in *. rewrite <- H in H3. rewrite H3 in *.  destruct (y @ point).
+    reflexivity. constructor. reflexivity. apply H0. auto.  rewrite H3. rewrite H, H1 in H3. rewrite H3. rewrite H in *. destruct (y @ point).
+    reflexivity. apply H0. auto.
 Qed.
 
-Definition lista_filter_indexS {A} {AS : Setoid A} :=
-  injF2 (@lista_filter_index A AS) _.
+Definition lista_filter_indexS {A} {AS : Setoid A} {AP : Pointed A} :=
+  injF2 (@lista_filter_index A AS AP) _.
+
+
 
 Fixpoint list_filter_index' {A : Type} {AS : Setoid A}  (l : list (maybe A)) n : list (nat * A) :=
   match l with
@@ -549,45 +667,54 @@ Fixpoint list_filter_index' {A : Type} {AS : Setoid A}  (l : list (maybe A)) n :
   end
 .
 
-Definition lista_filter_index' {A : Type} {AS : Setoid A}  (l : lista (maybe A)) : list (nat * A) :=
+Definition lista_filter_index' {A : Type} {AS : Setoid A}   (l : lista (maybe A)) : list (nat * A) :=
   match l with
-    | listaCons _ a' l' =>
-      match a' with
-        | Some _ =>  []
-        | None => list_filter_index' l' 0
-      end
+    | listaCons _  l' => list_filter_index' l' 0
   end
 .
 
-Instance lista_filter_index'_Proper {A : Type} {AS : Setoid A}: Proper (equiv ==> equiv ) (@lista_filter_index' A AS).
+Instance lista_filter_index'_Proper {A : Type} {AS : Setoid A}  : Proper (equiv ==> equiv ) (@lista_filter_index' A AS).
 Proof.
   autounfold. intros. destruct x, y.  unfold lista_filter_index'. generalize 0 H. clear H. apply list_ind_2 with (l1:=l) (l2:=l0).
-  - intros. destruct H. simpl. matchequiv.  
-  - intros. destruct H0 as [? [? ?]]. matchequiv.  destruct a. inversion H1. simpl. rewrite <- H. reflexivity. simpl.  auto. 
-  - intros. destruct H0.  pose (listaCons_equiv _ _ m m0 b [] H1). matchequiv. destruct a.  inversion H0. simpl.  rewrite H. simpl. reflexivity.   simpl.   auto.
-  - intros. destruct H0.  pose (listaCons_equiv _ _ m m0 b d H1). matchequiv. simpl. matchequiv. constructor. simpl in H3. rewritesr. apply H. auto. apply H. auto.
+  - intros. destruct H. simpl. reflexivity. 
+  - intros. destruct H0 as [? ?].   destruct a. inversion H0. simpl. rewrite <- H. reflexivity. simpl.  auto. 
+  - intros. destruct H0.   destruct a.  inversion H0. simpl.  rewrite H. simpl. reflexivity.   simpl.   auto.
+  - intros. destruct H0.    simpl. matchequiv. constructor. simpl in H2. rewritesr. apply H. auto. apply H. auto.
 Qed.
 
 Definition lista_filter_indexS' {A} {AS : Setoid A} :=
   injF (@lista_filter_index' A AS) _.
+
+Lemma lista_equiv_nth :
+    forall A (AS : Setoid A) (AP : Pointed A) (l1 l2 : lista A) ,
+      (forall ci : nat,
+         lista_nth ci l1 ==
+         lista_nth ci l2) -> l1 == l2.
+Proof.
+    intros. destruct l1, l2. generalize H. clear H. apply list_ind_2 with (l1:=l) (l2:=l0).
+    intros. reflexivity. 
+    intros. split. specialize (H0 0). simpl in H0. symmetry. auto. apply H. intros. specialize (H0 (S ci)). simpl in *. all_cases. 
+    intros. split. specialize (H0 0). simpl in H0. auto. apply H. intros. specialize (H0 (S ci)). simpl in *. all_cases. 
+    intros. split. specialize (H0 0). simpl in H0. auto. apply H. intros. specialize (H0 (S ci)). simpl in *. auto. 
+Qed.
 
 Lemma equiv_nth :
     forall A (AS : Setoid A) (a : A) l1 a2 l2,
       (forall ci : nat,
          nth ci l1 a ==
          nth ci l2 a2) -> a == a2.
-  Proof.
+Proof.
     intros.  generalize H. clear H. apply list_ind_2 with (l1:=l1) (l2:=l2).
     intros. specialize (H 0). auto.
     intros. apply H. intros. specialize (H0 (S ci)). simpl in H0. simpl. all_cases.
     intros. apply H. intros. specialize (H0 (S ci)). simpl in H0. simpl. all_cases.
     intros. apply H. intros. specialize (H0 (S ci)). simpl in H0. auto.
-  Qed.
+Qed.
   
   Lemma listAll_nth :
-    forall A (AS : Setoid A) (a : A) a2 l,
+    forall A (AS : Setoid A) (AP : Pointed A) l,
       (forall ci : nat,
-         nth ci l a2  == a) -> list_all l a.
+         nth ci l point  == point) -> list_all l.
   Proof.
     intros.  generalize H. clear H. induction l. 
     intros. simpl. auto. 
@@ -595,36 +722,28 @@ Lemma equiv_nth :
   Qed.
 
   Lemma equiv_lista :
-    forall A (AS : Setoid A) (a1 : A) l1 a2 l2,
+    forall A (AS : Setoid A) (AP : Pointed A)  l1  l2,
       (forall ci : nat,
-         nth ci l1 a1 ==
-         nth ci l2 a2) ->
-      lista_equiv0 a1 a2 l1 l2.
+         nth ci l1 point ==
+         nth ci l2 point) ->
+      lista_equiv0 l1 l2.
   Proof.
     intros. generalize H. clear H. apply list_ind_2 with (l1:=l1) (l2:=l2).
     intros. specialize (H 0). simpl in H. simpl. auto.
-    intros. split. apply equiv_nth with (l1:=nil) (l2:=b). intros. specialize (H0 (S ci)).   simpl in H0. simpl. all_cases. apply listAll_nth with (a2:=a2). intros. specialize (H0 ci). symmetry. generalize H0. simpl.  all_cases.
+    intros. split. specialize (H0 0).  simpl in H0. symmetry. auto. apply listAll_nth. intros.  specialize (H0 (S ci)).   simpl in H0. symmetry. auto. 
     intros. split. specialize (H0 0).  simpl in H0. auto. apply H.  intros. specialize (H0 (S ci)). simpl in H0.  generalize H0. simpl.  all_cases.
     intros. split. specialize (H0 0).  simpl in H0. auto. apply H.  intros. specialize (H0 (S ci)). simpl in H0.  auto.
   Qed.
 
-(*  Definition listOfLista {A} {AS : Setoid A} (l : lista A) :=
+  Definition listOfLista {A} {AS : Setoid A} (l : lista A) :=
     match l with
-      | listaCons _ _ l => l
-    end. *)
+      | listaCons _ l => l
+    end.
   
-  Lemma equiv_lista_truncate_equiv_default_value :
-    forall A (AS : Setoid A) n (a1' a2' a1 a2 : A) l1 l2,
-      lista_truncate n a1' (listaCons _ a1 l1) == lista_truncate n a2' (listaCons _ a2 l2) ->
-      a1' == a2'.
-  Proof.
-    intros. apply lista_equiv0_equiv with (l1:=lista_truncate0 n a1 l1) (l2:=lista_truncate0 n a2 l2). auto.
-  Qed.
-
   Lemma eq_lista_nth_lista_truncate_lt_lista_nth :
-    forall A (AS : Setoid A) m n (a: A) l,
+    forall A (AS : Setoid A) (AP : Pointed A) m n l,
       m < n ->
-      lista_nth m (lista_truncate n a l) = lista_nth m l.
+      lista_nth m (lista_truncate n  l) = lista_nth m l.
   Proof.
     intros. destruct l. generalize m n H. clear m n H. induction l.
     - double induction m n.
@@ -635,7 +754,7 @@ Lemma equiv_nth :
         * inversion H1. inversion H3.
         * simpl. auto.
         * inversion H1. inversion H3.
-        * apply H0. auto using lt_S_n.
+        * auto. 
     - intros. destruct m, n.
       + inversion H.
       + simpl. auto.
@@ -643,77 +762,44 @@ Lemma equiv_nth :
       + simpl. apply IHl. apply lt_S_n. auto.
   Qed.
   
-  (* Lemma equiv_lista_truncate_S_cons_nil :
-    forall A (AS : Setoid A) n (a1' a2' a1 a2 b1: A) l1,
-      b1 == a2 ->
-      lista_truncate n a1' (listaCons _ a1 l1) == lista_truncate n a2' (listaCons _ a2 nil) ->
-      lista_truncate (S n) a1' (listaCons _ a1 (b1::l1)) == lista_truncate (S n) a2' (listaCons _ a2 nil).
+  Lemma lista_truncate_nil :
+    forall n, lista_truncate0 n nil = nil.
   Proof.
-    intros. split. auto. auto.
+    destruct n. auto. auto.
   Qed.
-  
-  Lemma equiv_lista_truncate_S_nil_cons :
-    forall A (AS : Setoid A) n (a1' a2' a1 a2 b2: A) l2,
-      a1 == b2 ->
-      lista_truncate n a1' (listaCons _ a1 nil) == lista_truncate n a2' (listaCons _ a2 l2) ->
-      lista_truncate (S n) a1' (listaCons _ a1 nil) == lista_truncate (S n) a2' (listaCons _ a2 (b2::l2)).
+
+   Lemma lista_equiv_nil :
+    forall A (AS : Setoid A) (AP : Pointed A) (l : list A), list_all l -> lista_equiv0 l [].
   Proof.
-    intros. split. auto. auto.
+    induction l. auto. intros. destruct H. split. auto. auto.
   Qed.
-  
-  Lemma equiv_lista_truncate_S_nil_nil :
-    forall A (AS : Setoid A) n (a1' a2' a1 a2: A),
-      a1 == a2 ->
-      lista_truncate n a1' (listaCons _ a1 nil) == lista_truncate n a2' (listaCons _ a2 nil) ->
-      lista_truncate (S n) a1' (listaCons _ a1 nil) == lista_truncate (S n) a2' (listaCons _ a2 nil).
-  Proof.
-    intros. split. auto. auto.
-  Qed.*)
   
     
   Lemma equiv_nth_equiv_lista_truncate :
-    forall A (AS : Setoid A) n (a1 a2 : A) l1 l2,
-      a1 == a2 ->
+    forall A (AS : Setoid A) n  l1 l2,
       (forall ci : nat, ci < n ->
          lista_nth ci l1 ==
          lista_nth ci l2) ->
-      lista_truncate n a1 l1 == lista_truncate n a2 l2.
+      lista_truncate n l1 == lista_truncate n l2.
   Proof.
-    intros. destruct l1, l2. generalize l l0 H0. clear l l0 H0. induction n.
+    intros. destruct l1, l2. generalize l l0 H. clear l l0 H. induction n.
     - intros. simpl. auto.
-    - intros. generalize H0. clear H0.  apply list_ind_2 with (l1:=l) (l2:=l0).
-      +  split.
-        * specialize (H0 0). apply H0. apply lt_O_Sn.
-        * apply IHn. auto. 
+    - intros. generalize H. clear H.  apply list_ind_2 with (l1:=l) (l2:=l0).
+      +  intros. reflexivity. 
       + intros. split.
-        * specialize (H1 0). apply H1. apply lt_O_Sn.
-        * apply IHn. intros.   specialize (H1 (S ci)). simpl in H1. simpl.  all_cases.
-          {
-            apply H1. auto using lt_n_S.
-          }
-          {
-            apply H1. auto using lt_n_S.
-          }
+        * simpl.  specialize (H0 0). simpl in H0. symmetry. apply H0. apply lt_O_Sn.
+        * specialize IHn with (l:=nil) (l0:=b).  simpl in IHn. rewrite lista_truncate_nil in IHn. simpl in IHn. apply IHn. intros.  specialize (H0 (S ci)). simpl in H0. rewrite <- H0.  all_cases.  auto using lt_n_S.
       + intros. split.
-        * specialize (H1 0). apply H1. apply lt_O_Sn.
-        * apply IHn. intros.   specialize (H1 (S ci)). simpl in H1. simpl.  all_cases.
-          {
-            apply H1. auto using lt_n_S.
-          }
-          {
-            apply H1. auto using lt_n_S.
-          }
+        * simpl.  specialize (H0 0). simpl in H0. apply H0. apply lt_O_Sn.
+        * specialize IHn with (l:=b) (l0:=nil).  simpl in IHn. rewrite lista_truncate_nil in IHn. simpl in IHn.  apply IHn. intros.  specialize (H0 (S ci)). simpl in H0. rewrite  H0.  all_cases.  auto using lt_n_S.
       + intros. split.
-        * specialize (H1 0). apply H1. apply lt_O_Sn.
-        * apply IHn. intros.   specialize (H1 (S ci)). simpl in H1. simpl.  all_cases.
-          {
-            apply H1. auto using lt_n_S.
-          }
+        * simpl.  specialize (H0 0). simpl in H0. apply H0. apply lt_O_Sn.
+        * specialize IHn with (l:=b) (l0:=d).   simpl in IHn. apply IHn. intros.  specialize (H0 (S ci)). simpl in H0. rewrite  H0.  auto.  auto using lt_n_S.
   Qed.
 
   Lemma equiv_lista_truncate_equiv_nth :
-    forall A (AS : Setoid A) n (a1 a2 : A) l1 l2,
-      lista_truncate n a1 l1 == lista_truncate n a2 l2 ->
+    forall A (AS : Setoid A) n l1 l2,
+      lista_truncate n  l1 == lista_truncate n l2 ->
       (forall ci : nat, ci < n ->
          lista_nth ci l1 ==
          lista_nth ci l2).
@@ -731,24 +817,22 @@ Lemma equiv_nth :
     - intros. inversion H0.
     - intros. inversion H0.
     - intros. inversion H0.
+    - intros. simpl. auto. 
     - intros. simpl. destruct z.
-      + apply H. apply lt_S_n. auto. destruct H1. auto. 
-      + apply H. apply lt_S_n. auto. destruct H1. auto.
+      + apply H. apply lt_S_n. auto. destruct H1. simpl. rewrite lista_truncate_nil. auto. 
+      + apply H. apply lt_S_n. auto. destruct H1. simpl. rewrite lista_truncate_nil. auto.
     - intros. simpl. destruct z.
-      + apply H. apply lt_S_n. auto. destruct H1. auto. 
-      + apply H. apply lt_S_n. auto. destruct H1. auto.
-    - intros. simpl. destruct z.
-      + apply H. apply lt_S_n. auto. destruct H1. auto. 
-      + apply H. apply lt_S_n. auto. destruct H1. auto.
+      + apply H. apply lt_S_n. auto. destruct H1. simpl.  rewrite lista_truncate_nil. auto. 
+      + apply H. apply lt_S_n. auto. destruct H1. simpl. rewrite lista_truncate_nil. auto.
     - intros. simpl. destruct z.
       + apply H. apply lt_S_n. auto. destruct H1. auto. 
       + apply H. apply lt_S_n. auto. destruct H1. auto.
   Qed.
 
   Lemma lista_nth_ge_length :
-    forall A(AS : Setoid A) n (a:A) l,
+    forall A(AS : Setoid A) (AP : Pointed A) n l,
       length l <= n ->
-      lista_nth n (listaCons _ a l) = a.
+      lista_nth n (listaCons _ l) = point.
   Proof.
     intros. generalize dependent n. induction l.
     intros. destruct n.  auto. auto.
@@ -760,29 +844,710 @@ Lemma equiv_nth :
     intros. auto. intros. simpl. f_equal. auto.
   Qed.
 
-  Lemma lista_nth_truncate_equiv : forall A (AS:Setoid A) n0 (a :A) (l1 l2 : lista A) n, lista_truncate n0 a l1 == lista_truncate n0 a l2 -> n < n0 -> lista_nth n l1 == lista_nth n l2.
-Proof.
-  intros. destruct l1, l2. generalize n n0 H0 H.  clear n n0 H0 H. apply list_ind_2 with (l1:=l) (l2:=l0).
-  - simpl. intros. destruct n0. inversion H0. destruct H. destruct n. auto.  auto.
-  - intros. simpl in *. destruct n0.  inversion H0. destruct H1. destruct n. auto. rewrite <- H with (n0 := n0). destruct n. reflexivity. reflexivity. apply le_S_n. auto. auto.
-  - intros. simpl in *. destruct n0.  inversion H0. destruct H1. destruct n. auto. rewrite H with (n0 := n0). destruct n. reflexivity. reflexivity. apply le_S_n. auto. auto.
-  - intros. simpl in *. destruct n0.  inversion H0. destruct H1. destruct n. auto. apply H with (n0 := n0). apply le_S_n. auto. auto.
-Qed.
-Lemma lista_truncate_equiv_equiv : forall A (AS : Setoid A) l1 l2 n (a : A),  l1 == l2 -> lista_truncate n a l1 == lista_truncate n a l2.
+
+Lemma lista_truncate_equiv_equiv : forall A (AS : Setoid A) (AP :Pointed A) l1 l2 n,  l1 == l2 -> lista_truncate n l1 == lista_truncate n l2.
 Proof.
   intros. generalize n H. clear n H . destruct l1, l2. apply list_ind_2 with (l1:=l) (l2:=l0).
   - simpl. intros. induction n.
-    + simpl. split. reflexivity. auto.
+    + simpl. auto. 
     + simpl. tauto.
-  - intros. destruct H0.  destruct H1. induction n.
-    + simpl. split. reflexivity. auto.
-    + simpl. split. symmetry. auto. apply H. simpl. auto. 
+  - intros. destruct H0.   induction n.
+    + simpl. auto. 
+    + simpl. split. auto. specialize (H n H1). simpl in H. destruct n. apply H. auto. 
   - intros. destruct H0.  induction n.
-    + simpl. split. reflexivity. auto.
-    + simpl. split. auto. apply H. simpl. auto. 
+    + simpl. auto.  
+    + simpl. split. auto. specialize (H n H1). simpl in H. destruct n. apply H. auto. 
   - intros. destruct H0.  induction n.
-    + simpl. split. reflexivity. auto.
-    + simpl. split. auto. apply H. simpl. auto. 
+    + simpl. auto.  
+    + simpl. split. auto. specialize (H n H1). simpl in H. destruct n. apply H. auto. 
 Qed.
 
 
+Lemma truncate_idempotent:
+  forall A (AS : Setoid A) (AP : Pointed A) n  (l : lista A),
+    lista_truncate n  (lista_truncate n  l) == lista_truncate n  l.
+Proof.
+  intros. destruct l. apply nat_list_ind_2 with (l1:=n) (l2:=l).
+  - reflexivity.
+  - intros. simpl. auto.
+  -    intros. simpl. auto. 
+  -    intros. split. reflexivity    . auto.
+Qed.
+
+Lemma lista_nth_lista_update: forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)
+  n 
+  (a : A)
+  (l : lista A), lista_nth n (lista_update n l a)  = a.
+Proof.
+  intros. destruct l. simpl. apply nat_list_ind_2 with (l1:=n) (l2:=l).
+  - simpl. reflexivity.
+  - intros. simpl in *. reflexivity.
+  - intros. simpl in *. auto. 
+  - intros. simpl in *. auto. 
+Qed.
+
+Lemma lista_nth_lista_update_equiv: forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)
+  n 
+  (a : A)
+  (l : lista A), lista_nth n (lista_update n l a)  == a.
+Proof.
+  intros. apply eq_equiv. apply lista_nth_lista_update.
+Qed.
+
+Lemma lista_update_lista_nth: forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)
+  n 
+  (l : lista A),  (lista_update n l (lista_nth n l))  == l.
+Proof.
+  intros.  destruct l.  apply nat_list_ind_2 with (l1:=n) (l2:=l).
+  - simpl. split; [reflexivity  | reflexivity]. 
+  - intros.  split. reflexivity. assert (listaCons _ b == listaCons _ b). reflexivity.   auto. 
+  - intros. simpl in *. split ; [reflexivity | ]. destruct b.
+      * simpl in *. auto. 
+      * simpl in *. auto. 
+  - intros. simpl in *. split ; [reflexivity | auto].
+  
+Qed.
+
+Lemma lista_update_lista_update: forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)
+  n
+  a c
+  (l : lista A),  (lista_update n (lista_update n l a) c )  == lista_update n l c .
+Proof.
+  intros. destruct l. simpl. apply nat_list_ind_2 with (l1:=n) (l2:=l).
+    - simpl. split; [reflexivity | reflexivity]. 
+    - intros. simpl in *. split; [reflexivity |]. destruct b.
+      * simpl in *. tauto. 
+      * simpl in *. split ; [reflexivity | tauto]. 
+    - intros. simpl in *. split ; [reflexivity | auto].
+    - intros. simpl in *. split ; [reflexivity | auto].
+  
+Qed.
+
+Lemma lista_nth_lista_update_diff_index: forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)
+  n n' a
+  (l : lista A), 
+  n <> n' ->lista_nth n' (lista_update n l a) = lista_nth n' l.
+Proof.
+  intros.  destruct l. generalize H a. clear H. apply nat_list_ind_4 with (l1:=n) (l2:=n')(l3:=l).
+  - intros. destruct H.  auto.
+  - intros. destruct H0.  auto.
+  - intros. destruct H0. auto. 
+  - intros. destruct H0. auto. 
+  - intros. simpl. all_cases. 
+  - intros. simpl. all_cases.
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl in *. destruct b. apply H. auto. apply H. auto. 
+  - intros. simpl in *. destruct b. apply H. auto. apply H. auto.
+  - intros. simpl in *. apply H. auto.
+  - intros. simpl in *. apply H. auto.
+  - exact [].
+Qed.
+Lemma lista_update_lista_update_diff_index: forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)
+  n n' a a'
+  (l : lista A), 
+  n <> n' -> lista_update n' (lista_update n l a) a' = lista_update n (lista_update n' l a') a.
+Proof.
+  intros.  destruct l. generalize H a a'. clear H. apply nat_list_ind_4 with (l1:=n) (l2:=n')(l3:=l).
+  - intros. destruct H.  auto.
+  - intros. destruct H0.  auto.
+  - intros. destruct H0. auto. 
+  - intros. destruct H0. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence. 
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence.
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence.
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence.
+  - exact [].
+Qed.
+
+Lemma list_update_list_update_diff_index: forall
+  (A : Type)
+  (AS : Setoid A)
+  n n' a a'
+  (l : list A), 
+  n <> n' -> list_update' n' (list_update' n l a) a' = list_update' n (list_update' n' l a') a.
+Proof.
+  intros.  generalize H a a'. clear H. apply nat_list_ind_4 with (l1:=n) (l2:=n')(l3:=l).
+  - intros. destruct H.  auto.
+  - intros. destruct H0.  auto.
+  - intros. destruct H0. auto. 
+  - intros. destruct H0. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto. 
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl. auto.
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence. 
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence.
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence.
+  - intros. simpl in *. assert (z<>b); [auto|]. specialize (H H1 a0 a'0). inversion H. congruence.
+  - exact [].
+Qed.
+
+Require Import Coq.Arith.Le.
+
+  Lemma list_findan_ge : forall A (AS : Setoid A )(AP : Pointed A) (l: list A) n
+                            (equiv_dec: forall a a' : A, {a == a'} + {~ a == a'}),
+                            list_findan equiv_dec l n >= n.
+  Proof.
+    intros. generalize n. induction l.
+    simpl. apply le_n.
+    simpl. destruct (equiv_dec point a).
+    apply le_n.
+    intros. apply le_trans with (m:=S n1).
+    apply Nat.le_le_succ_r. apply le_n.
+    apply IHl.
+  Qed.
+  Open Scope nat_scope.
+  Lemma list_findan_plus : forall A (AS : Setoid A )(AP : Pointed A) (l: list A) m n
+                            (equiv_dec: forall a a' : A, {a == a'} + {~ a == a'}),
+                            list_findan equiv_dec l (m + n) = list_findan equiv_dec l m + n.
+  Proof.
+    intros. generalize m n. induction l.
+    intros. simpl. reflexivity .
+    intros. simpl. destruct (equiv_dec point a).
+    auto.
+    apply (IHl (S m0) n0).
+  Qed.
+
+  Lemma list_filter_index_plus : forall A (AS : Setoid A )(AP : Pointed A) (l: list A) q m n
+                            ,
+                            list_filter_index q l (m + n) = map (flip plus n) (list_filter_index q l m ).
+  Proof.
+    intros. generalize m n. induction l.
+    intros. simpl. reflexivity .
+    intros. simpl. destruct (q @ a).
+    rewrite map_cons. f_equal. rewrite <- plus_Sn_m. apply IHl.
+    rewrite <- plus_Sn_m. apply IHl.
+  Qed.
+
+  Lemma list_filter_index_plus' : forall A (AS : Setoid A) (l: list (maybe A))  m n
+                            ,
+                            list_filter_index'  l (m + n) = mapS @ (flipS @ plusS @ n *** idS) @ (list_filter_index'  l m ).
+  Proof.
+    intros. generalize m n. induction l.
+    intros. simpl. reflexivity .
+    intros. simpl. destruct a.
+    rewrite map_cons. f_equal. rewrite <- plus_Sn_m. apply IHl.
+    rewrite <- plus_Sn_m. apply IHl.
+  Qed.
+
+  Lemma lista_finda_lista_update:
+  forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)equiv_dec
+  n  a
+  (l : lista A), 
+    ~    lista_nth n l == point ->
+    ~ a == point -> 
+    lista_finda equiv_dec
+    (lista_update n l a) =
+       lista_finda equiv_dec
+                 l.
+Proof.
+  intros. destruct l. generalize H. clear H. apply nat_list_ind_2 with (l1:=n) (l2:=l).
+  - intros. simpl in *. destruct H. reflexivity.
+  - intros. simpl in *. destruct (equiv_dec point a), (equiv_dec point a0).  auto. symmetry in e.  tauto.  symmetry in e. tauto. auto.
+  - intros. simpl in *. destruct H1. reflexivity.
+  - intros. simpl in *. destruct (equiv_dec point c). auto. rewrite (list_findan_plus _ _ _ (lista_update0 b d a) 0 1 _). rewrite (list_findan_plus _ _ _ d 0 1 _). f_equal. auto.
+Qed.
+
+Lemma lista_update_lista_finda:
+
+  forall
+  (A : Type)
+  (AS : Setoid A)
+  (AP : Pointed A)equiv_dec
+  (l : lista A), 
+    (lista_update (lista_finda equiv_dec l) l point) ==
+                 l.
+Proof.
+  intros. destruct l. induction l. 
+  - intros. simpl in *. split.  reflexivity. auto.
+    
+  - intros. simpl in *.  destruct (equiv_dec point a).   simpl. split.  auto. fold (lista_equiv (listaCons _ l) (listaCons _ l)). reflexivity. rewrite (list_findan_plus _ _ _ l 0 1). rewrite <- plus_n_Sm.    simpl. split. reflexivity. rewrite <- plus_n_O.  auto. 
+Qed.
+
+
+  Existing Instance list_Foldable.
+  Existing Instance listFunctor.
+Section And_Monoid.
+  Existing Instance and_Monoid.
+    Lemma filterTrue :
+      forall A (AS : Setoid A)
+             (p : maybeS AS ~> iff_setoid)
+             (q : maybeS AS ~> boolS)
+             (a : lista (maybe A)),
+        (forall b : maybe A, q @ b == true -> p @ b) ->
+        fold @ (mapS @ (p ∘ flipS @ lista_nthS @ a) @ (lista_filter_indexS @ q @ a)) == True.
+    Proof.
+      intros. destruct a. induction l.
+      simpl.  destruct_bool (q @ None). tauto. tauto.
+      split. auto. intros. simpl in *. destruct_bool (q @ None). auto. destruct_bool (q @ a).
+      - split.
+        + apply H. auto.
+        + rewrite (list_filter_index_plus _ _ _ _ _ 0 1). rewrite map_map. unfold flip.  generalize IHl. clear IHl. induction l.
+          * simpl. auto.
+          * intros. simpl. destruct_bool (q @ a0).
+            {
+              split.
+              {
+                tauto.
+              }
+              {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H5. auto. destruct H6. split.
+                  {
+                    rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. auto.
+                  }
+                }
+              }
+            }
+            {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H5. auto. split.
+                  {
+                    rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. auto.
+                  }
+                }
+              }
+      -  rewrite (list_filter_index_plus _ _ _ _ _ 0 1). rewrite map_map. unfold flip.  generalize IHl. clear IHl. induction l.
+          * simpl. auto.
+          * intros. simpl. destruct_bool (q @ a0).
+            {
+              split.
+              {
+                tauto.
+              }
+              {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H5. auto. destruct H6. split.
+                  {
+                    rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. auto.
+                  }
+                }
+              }
+            }
+            {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H5. auto. split.
+                  {
+                    rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. auto.
+                  }
+                }
+            }
+    Qed.
+
+    Lemma filterTrue' :
+      forall A (AS : Setoid A)
+             (a : lista (maybe A)),
+        fold @ (mapS @ (uncurryS @ equivS ∘ (flipS @ lista_nthS @ a *** SomeS)) @ (lista_filter_indexS' @ a)) == True.
+    Proof.
+      intros. destruct a. induction l.
+      simpl. reflexivity.
+      split. auto. intros. simpl in *. destruct a.
+      - simpl. split.
+        + reflexivity.
+        + rewrite (list_filter_index_plus' _ _ _ 0 1). unfold mapS. normalize. rewrite map_map. unfold flipS, flip.  normalize. generalize IHl. clear IHl. induction l.
+          * simpl. auto.
+          * intros. simpl in *. destruct a0.
+            {
+              split.
+              {
+                simpl. reflexivity. 
+              }
+              {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H1. auto. destruct H2. split.
+                  {
+                    destruct a1. rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. split. reflexivity. auto.
+                  }
+                }
+              }
+            }
+            {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H1. auto. split.
+                  {
+                    destruct a0. rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. auto.
+                  }
+                }
+              }
+      -  rewrite (list_filter_index_plus' _ _ _ 0 1). unfold mapS. normalize. rewrite map_map. unfold flipS, flip.  normalize. generalize IHl. clear IHl. induction l.
+          * simpl. auto.
+          * intros. simpl in *. destruct a.
+            {
+              split.
+              {
+                simpl. reflexivity. 
+              }
+              {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H1. auto. destruct H2. split.
+                  {
+                    destruct a0. rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. split. reflexivity. auto.
+                  }
+                }
+              }
+            }
+            {
+                clear IHl. generalize IHl0. clear IHl0. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct IHl1. destruct H1. auto. split.
+                  {
+                    destruct a. rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. auto.
+                  }
+                  {
+                    apply IHl0. split.  auto. intro. auto.
+                  }
+                }
+            }
+    Qed.
+End And_Monoid.
+
+    Definition SS : natS ~> natS := injF S _.
+Section Or_Monoid.
+  Existing Instance or_Monoid.
+    Lemma filterTrue_one :
+      forall A (AS : Setoid A) (AP : Pointed A)
+             (p : natS ~> iff_setoid)
+             (q : AS ~> boolS)
+             (a : lista A),
+        q @ point = false ->
+        (exists b : nat, q @ (lista_nthS @ b @ a) == true /\ p @ b) ->
+        fold @ (mapS @ p @ (lista_filter_indexS @ q @ a)) == True.
+    Proof.
+      intros. destruct a. generalize dependent p. induction l.
+      intros. simpl. destruct H0. simpl in H0. destruct x. destruct H0. rewrite H in H0. inversion H0.  destruct H0. rewrite H in H0. inversion H0.
+      split. auto. intros. simpl in *. rewrite H in *. destruct H0.  destruct x.
+      - destruct H0. rewrite H0. simpl. left. auto. 
+      - destruct (q @ a).
+        + simpl. right. rewrite (list_filter_index_plus _ _ _ _ _ 0 1). rewrite map_map. unfold flip. destruct (IHl (p ∘ SS)). exists x.   auto. clear H0 H1 H2. specialize (H3 I). generalize H3. clear H3. induction l.
+          * simpl. auto.
+          * intros. destruct_bool (q @ a0).
+            {
+              destruct H3. 
+              {
+                tauto.
+              }
+              {
+                generalize H1. clear H1. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct H1.  destruct a1. tauto. right. left. simpl. rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. auto. right. right. clear H H0 IHl IHl0 IHl1. induction l0.
+                  {
+                    simpl in *. auto.
+                  }
+                  {
+                    simpl in *. destruct H1.
+                    {
+                      left.  rewrite <- plus_n_Sm. rewrite <- plus_n_O.  auto.
+                    }
+                    {
+                      right. auto. 
+                    }
+                  }
+                }
+              }
+            }
+            {
+                clear IHl IHl0. generalize H3. clear H3. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. simpl.  destruct H3. destruct a1.  simpl. tauto. simpl.  rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. tauto. right. apply IHl0. auto. 
+                }
+            }
+        + rewrite (list_filter_index_plus _ _ _ _ _ 0 1). rewrite map_map. unfold flip. destruct (IHl (p ∘ SS)). exists x.   auto. clear H0 H1 H2. specialize (H3 I). generalize H3. clear H3. induction l.
+          * simpl. auto.
+          * intros. destruct_bool (q @ a0).
+            {
+              destruct H3. 
+              {
+                tauto.
+              }
+              {
+                generalize H1. clear H1. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct H1.  destruct a1. tauto. right. left. simpl. rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. auto. right. right. clear H H0 IHl IHl0 IHl1. induction l0.
+                  {
+                    simpl in *. auto.
+                  }
+                  {
+                    simpl in *. destruct H1.
+                    {
+                      left.  rewrite <- plus_n_Sm. rewrite <- plus_n_O.  auto.
+                    }
+                    {
+                      right. auto. 
+                    }
+                  }
+                }
+              }
+            }
+            {
+                clear IHl IHl0. generalize H3. clear H3. 
+                induction (list_filter_index q l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. simpl.  destruct H3. destruct a1.  simpl. tauto. simpl.  rewrite <- (plus_n_Sm a1 0). rewrite <- plus_n_O. tauto. right. apply IHl0. auto. 
+                }
+            }
+    Qed.
+
+    Lemma filterTrue_one' :
+      forall A (AS : Setoid A)
+             (p : natS ~*~ AS ~> iff_setoid)
+             (a : lista (maybe A)),
+        (exists (b : nat) c, lista_nthS @ b @ a == Some c /\ p @ (b, c)) ->
+        fold @ (mapS @ p @ (lista_filter_indexS' @ a)) == True.
+    Proof.
+      intros. destruct a. generalize dependent p. induction l.
+      intros. simpl. destruct H as [b [c H]]. simpl in H. destruct b. destruct H. inversion H.  destruct H.  inversion H.
+      split. auto. intros. simpl in *. clear H0.  destruct H as [b [c H]].  destruct b.
+      - destruct H. destruct a.
+        + simpl in *. left. assert (p @ (0, a) == p @ (0, c)). evalproper.  split; [reflexivity | auto]. rewrite H1. auto. 
+        + simpl in *. tauto. 
+      - destruct a.
+        + simpl. right. rewrite (list_filter_index_plus' _ _ _ 0 1). unfold mapS. normalize. rewrite map_map. destruct (IHl (p ∘ (SS *** idS))). clear IHl.  exists b.   exists c. auto. clear H H0. specialize (H1 I). generalize H1. clear H1. induction l.
+          * simpl. auto.
+          * intros. simpl. destruct a0. 
+            {
+              simpl. destruct H1. 
+              {
+                left. auto. 
+              }
+              {
+                clear IHl. right. generalize H. clear H. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct H.
+                  {
+                    destruct a1. simpl.
+                    left.  rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. destruct n.
+                    auto. auto.
+                  }
+                  {
+                    right. auto. 
+                  }
+                }
+              }
+            }
+            {
+              simpl in H1. clear IHl.  generalize H1. clear H1. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct H1.
+                  {
+                    destruct a0. simpl.
+                    left.  rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. destruct n.
+                    auto. auto.
+                  }
+                  {
+                    right. auto. 
+                  }
+                }
+            }
+        + rewrite (list_filter_index_plus' _ _ _ 0 1). unfold mapS. normalize. rewrite map_map. destruct (IHl (p ∘ (SS *** idS))). clear IHl.  exists b.   exists c. auto. clear H H0. specialize (H1 I). generalize H1. clear H1. induction l.
+          * simpl. auto.
+          * intros. simpl. destruct a. 
+            {
+              simpl. destruct H1. 
+              {
+                left. auto. 
+              }
+              {
+                clear IHl. right. generalize H. clear H. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct H.
+                  {
+                    destruct a0. simpl.
+                    left.  rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. destruct n.
+                    auto. auto.
+                  }
+                  {
+                    right. auto. 
+                  }
+                }
+              }
+            }
+            {
+              simpl in H1. clear IHl.  generalize H1. clear H1. 
+                induction (list_filter_index' l 1).
+                {
+                  auto.
+                }
+                {
+                  intros. destruct H1.
+                  {
+                    destruct a. simpl.
+                    left.  rewrite <- (plus_n_Sm n 0). rewrite <- plus_n_O. destruct n.
+                    auto. auto.
+                  }
+                  {
+                    right. auto. 
+                  }
+                }
+            }
+    Qed.
+    
+
+End Or_Monoid.
+
+    Fixpoint list_filter_index_2 {A}  {AS : Setoid A} (p : AS ~> boolS) 
+             (l : list A)  :=
+      match l with
+        | nil => nil
+        | a' :: l' =>
+          if p @ a'
+          then 0 :: map S (list_filter_index_2  p l')
+          else map S (list_filter_index_2 p l')
+      end.
+
+    Definition lista_filter_index_2 {A}  {AS : Setoid A} {AP : Pointed A} (p : AS ~> boolS) 
+             (l : lista A) :=
+      match l with
+        | listaCons _ l' => if p @ point then nil else list_filter_index_2 p l'
+      end.
+
+    Lemma list_filter_index_eq : forall A (AS : Setoid A)  (p : AS ~> boolS) (l : list A) n,
+                                     list_filter_index p l n = map (plus n) (list_filter_index_2 p l).
+    Proof.
+      intros. generalize n. induction l. 
+      simpl. auto.
+      intros.       simpl. destruct (p @ a). rewrite map_cons. f_equal.  auto. rewrite map_map. rewrite IHl. clear IHl.  induction ((list_filter_index_2 p l)).    auto. simpl. f_equal. auto. auto. rewrite map_map. rewrite IHl. clear IHl.  induction ((list_filter_index_2 p l)).    auto. simpl. f_equal. auto. auto.
+    Qed.
+      
+    Lemma lista_filter_index_eq : forall A (AS : Setoid A) (AP : Pointed A) (p : AS ~> boolS) (l : lista A),
+            lista_filter_index p l  = lista_filter_index_2 p l.
+    Proof.
+      intros. destruct l. induction l. 
+      simpl. reflexivity. 
+      simpl. destruct (p @ point).
+      auto.
+      destruct (p @ a).  f_equal. rewrite list_filter_index_eq.  clear IHl. induction ((list_filter_index_2 p l)).  auto. simpl. f_equal. rewrite list_filter_index_eq.  clear IHl. induction ((list_filter_index_2 p l)).  auto. simpl. f_equal. 
+    Qed.
+
+
+        Fixpoint list_zipWith_not_proper {A B C} (f : A -> B -> C) l1 l2 :=
+      match l1, l2 with
+        | nil, _ => nil
+        | a :: l1', nil => nil
+        | a :: l1', b :: l2' => f a b :: list_zipWith_not_proper f l1' l2'
+      end
+    .    

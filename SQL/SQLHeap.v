@@ -1,9 +1,8 @@
-Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed SQLUtils Lista Matrixp.
-Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics Coq.Arith.Compare_dec Coq.Arith.Le.
-
+Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed SQLUtils Lista Matrixp ListaLens MatrixpLens MonoidUtils.
+Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics Coq.Arith.Compare_dec Coq.Arith.Le Coq.Arith.Lt.
 Definition insertRow (table : nat) (h : database) : database :=
   caseMaybeS
-    @ (cycle24S @ maybeRowSetter @ table @ (SomeS @ (lista_repeatS @ point)) @ h
+    @ (cycle24S @ maybeRowSetter @ table @ (SomeS @ (lista_repeat)) @ h
                 ∘ lista_findaS maybe_row_equiv_dec)
     @ h
     @ (rowsGetter @ table @ h).
@@ -52,7 +51,6 @@ Definition predToTableS : sqlPredS ~> natS := @fstS nat nat _ _.
 
 Definition predToColS : sqlPredS ~> natS := @sndS nat nat _ _.
 
-Import SQLValType.
 
 
 Definition getNewAddr (type1 : sqlType) (h : database) :  maybe sqlAddr.
@@ -94,26 +92,13 @@ Qed.
 
 Definition checkAddrPredS := injF2 checkAddrPred _.
 
-Definition _newAddr (type1 : sqlType) h :=
-  pairS
-    @ (insertRowS @ type1 @ h)
-    <$> (getNewAddr type1 h).
-
-Definition newAddr : sqlTypeS ~> databaseS ~~> maybeS (databaseS ~*~ sqlAddrS).
-  simple refine (injF2 _newAddr _).
-  Lemma newAddr_1 : Proper (equiv ==> equiv ==> equiv) _newAddr.
-  Proof.
-    autounfold. intros. unfold _newAddr, getNewAddr. evalproper. rewritesr. bindproper. rewritesr. auto. 
-  Qed.
-  apply newAddr_1.
-Defined.
 
 Definition _filterVal val1 val2  :=
   if SQLValType.equiv_dec val1 val2 then true else false.
 
 Instance _filterVal_Proper : Proper (equiv ==> equiv ==> equiv) _filterVal.
 Proof.
-  autounfold. intros. unfold _filterVal. rewrite H, H0. destruct (equiv_dec y y0). reflexivity. reflexivity. 
+  autounfold. intros. unfold _filterVal. rewrite H, H0. destruct (SQLValType.equiv_dec y y0). reflexivity. reflexivity. 
 Qed.
 
 Definition filterVal := injF2 _filterVal _.
@@ -181,6 +166,20 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
   
   Definition t := database.
   Program Instance tS : Setoid t.
+
+  Definition _newAddr (type1 : sqlType) h :=
+  pairS
+    @ (insertRowS @ type1 @ h)
+    <$> (getNewAddr type1 h).
+
+  Definition newAddr : sqlTypeS ~> databaseS ~~> maybeS (databaseS ~*~ sqlAddrS).
+    simple refine (injF2 _newAddr _).
+    Lemma newAddr_1 : Proper (equiv ==> equiv ==> equiv) _newAddr.
+    Proof.
+      autounfold. intros. unfold _newAddr, getNewAddr. evalproper. rewritesr. bindproper. rewritesr. auto. 
+    Qed.
+    apply newAddr_1.
+  Defined.
 
   Definition _delete addr h : t := deleteRowS
                                     @ (addrToTableS @ addr)
@@ -257,10 +256,10 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
   Instance foldable : @FoldableFunctor l lS func := list_Foldable.
   Instance app : @Applicative l lS func := list_Applicative.
 
-  Definition _lookupByObject pred1 val1 h : list sqlVal :=
+  Definition _lookupByObject pred1 val1 h : list sqlAddr :=
     let t := predToTableS @ pred1 in
     caseMaybeS
-      @ (mapS @ (vAddrS ∘ getAddr @ t) ∘ lista_filter_indexS @ (filterSomeVal @ val1))
+      @ (mapS @ (getAddr @ t) ∘ lista_filter_indexS @ (filterSomeVal @ val1))
       @ nil
       @ (colGetter @ t @ (predToColS @ pred1) @ h).
 
@@ -269,12 +268,12 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     solve_properS _lookupByObject.
   Qed.
 
-  Definition lookupByObject   : sqlPredS ~> sqlValS ~~> tS ~~> lS _ sqlValS := injF3 _lookupByObject _.
+  Definition lookupByObject   : sqlPredS ~> sqlValS ~~> tS ~~> listS sqlAddrS := injF3 _lookupByObject _.
   
-  Definition _lookupByPred pred1 h : list (sqlVal * sqlVal) :=
+  Definition _lookupByPred pred1 h : list (sqlAddr * sqlVal) :=
     let t := predToTableS @ pred1 in
     caseMaybeS
-      @ (mapS @ ((vAddrS ∘ getAddr @ t) *** idS) ∘ lista_filter_indexS')
+      @ (mapS @ ((getAddr @ t) *** idS) ∘ lista_filter_indexS')
       @ nil                  
       @ (colGetter @ t @ (predToColS @ pred1) @ h).
 
@@ -283,7 +282,7 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     solve_properS _lookupByPred.
   Qed.
 
-  Definition lookupByPred   : sqlPredS ~> tS ~~> lS _ (sqlValS ~*~ sqlValS) := injF2 _lookupByPred _.
+  Definition lookupByPred   : sqlPredS ~> tS ~~> listS (sqlAddrS ~*~ sqlValS) := injF2 _lookupByPred _.
   Definition _readType addr h : maybe sqlType :=
      caseMaybeS
       @ (caseMaybeS
@@ -304,7 +303,7 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     sqlAddrS ~> databaseS ~~> maybeS sqlTypeS := injF2 _readType _.
   
   Definition _predOfType pred1 type1 (h : database) :=
-    type1 == predToTableS @ pred1 /\ ltMaybeS @ (predToColS @ pred1) @ (widthGetter @ type1 @ h).
+    type1 == predToTableS @ pred1 .
 
   Instance _predOfType_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) _predOfType.
   Proof.
@@ -378,260 +377,130 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
   Qed.
   *)
 
-  Lemma widthGetter_cons : forall n a l, widthGetter @ (S n) @ (a :: l) = widthGetter @ n @ l.
-  Proof.
-    intros. simpl. unfold _nthTraversal, _nthTraversal'. f_equal. simpl. matchequiv. rewrite ConstIso'_iso. f_equal. rewrite ConstIso'_iso. f_equal.
-  Qed.
+Lemma nthPreview_cons : forall A (AS : Setoid A) n (a : A) l, preview @ nthPreview (S n) @ (a :: l) == preview @ nthPreview n @ l.
+Proof.
+  intros. reflexivity.
+Qed.
 
-  Lemma maybeRowGetter_cons : forall n r a l, maybeRowGetter @ (S n) @ r @ (a :: l) = maybeRowGetter @ n @ r @ l.
-  Proof.
-    intros. simpl. unfold _nthTraversal, _nthTraversal'. f_equal. simpl. matchequiv. rewrite ConstIso'_iso. f_equal. rewrite ConstIso'_iso. f_equal.
-  Qed.
+Lemma maybeRowGetter_cons : forall n r a l, maybeRowGetter @ (S n) @ r @ (a :: l) == maybeRowGetter @ n @ r @ l.
+Proof.
+  intros. reflexivity. 
+Qed.
 
-  Lemma read_cons : forall n n2 r c a l, read @ (S n, r) @ (S n2, c) @ (a :: l) == read @ (n, r) @ (n2, c) @ l.
-  Proof.
-    intros. Opaque equiv.  simpl. unfold _read. rewrite <- cellGetter_comp. unfold tableGetter, _tableGetter. normalize. unfold previewS. normalizecomp. unfold preS, pre, viewS, view. normalizecomp. simpl (addrToTableS @ _). pose (nthTraversal_cons_S_Const _ _ n a l0 _ _ _ (pre0 @ ConstIsoS (maybeS tableS) (maybeS tableS))) as e. rewrite e. clear e. simpl (addrToRowS @ _).  simpl (predToColS @ _).  rewrite <- cellGetter_comp. reflexivity. Transparent equiv.
-  Qed.
-
-  Require Import Coq.Arith.Lt.
+Lemma read_cons : forall n n2 r c a l, read @ (S n, r) @ (S n2, c) @ (a :: l) == read @ (n, r) @ (n2, c) @ l.
+Proof.
+  intros. reflexivity. 
+Qed.
   
-  Lemma eq_heap0 :
-    forall (h1 h2 : t) ,
-      (forall t, typeOfHeap @ t @ h1 <-> typeOfHeap @ t @ h2) ->
-      (forall p t, predOfType @ p @ t @ h1 <-> predOfType @ p @ t @ h2) ->
-      (forall v, allocated @ v @ h1 == allocated @ v @ h2) ->
-      (forall v p, read @ v @ p @ h1 == read @ v @ p @ h2) ->
-      h1 == h2.
-  Proof.
+Lemma eq_heap0 :
+  forall (h1 h2 : t) ,
+    (forall t, typeOfHeap @ t @ h1 <-> typeOfHeap @ t @ h2) ->
+    (forall p t, predOfType @ p @ t @ h1 <-> predOfType @ p @ t @ h2) ->
+    (forall v, allocated @ v @ h1 == allocated @ v @ h2) ->
+    (forall v p, read @ v @ p @ h1 == read @ v @ p @ h2) ->
+    h1 == h2.
+Proof.
     
-    intros. generalize H H0 H1 H2. clear H H0 H1 H2. apply list_ind_2 with (l1:=h1)(l2:=h2).
-    -    reflexivity.
-    - intros. destruct (H0 0). simpl in H5. unfold _typeOfHeap in H5. simpl in H5. assert (0 < S(length b)). apply lt_O_Sn. pose (H5 H6) as e. inversion e.
-    - intros. destruct (H0 0). simpl in H4. unfold _typeOfHeap in H4. simpl in H4. assert (0 < S(length b)). apply lt_O_Sn. pose (H4 H6) as e. inversion e.
-    - intros. constructor.
-      + clear H. destruct a, c. destruct (lt_eq_lt_dec n n0) as [[l2 | e] | ?].
-        * destruct n0. inversion l2. specialize (H1 (0, n0) 0). destruct H1 as [H1 H4]. clear H1 H0 H2 H3. compute in H4. assert (0 = 0 /\ S n0 <= S n0) as e. auto. specialize (H4 e). destruct H4. pose (nat_int _ _ l2) as e0. contradiction. 
-        * rewrite e in *. clear n e H0 H1. split. auto. destruct l0, l1. unfold _rows. generalize H2 H3. clear H2 H3. apply list_ind_2 with (l1:=l0) (l2:=l1).
+  intros. generalize H H0 H1 H2. clear H H0 H1 H2. apply list_ind_2 with (l1:=h1)(l2:=h2).
+  - reflexivity.
+  - intros. destruct (H0 0). simpl in H5. unfold _typeOfHeap in H5. simpl in H5. assert (0 < S(length b)). apply lt_O_Sn. pose (H5 H6) as e. inversion e.
+  - intros. destruct (H0 0). simpl in H4. unfold _typeOfHeap in H4. simpl in H4. assert (0 < S(length b)). apply lt_O_Sn. pose (H4 H6) as e. inversion e.
+  - intros. constructor.
+    + clear H. destruct a, c. clear H0 H1. destruct l0, l1. generalize H2 H3. clear H2 H3. apply list_ind_2 with (l1:=l0) (l2:=l1).
+      * intros. reflexivity.
+      * intros. simpl. destruct a.
+        {
+          specialize (H3 (0, 0) (0, 0)). simpl in H3.  tauto.
+        }
+        {
+          split; [reflexivity|]. apply listAll_nth. intros. specialize (H2 (0, S ci)). simpl in H2. unfold _allocated in H2. simpl in H2. simpl.  destruct (nth ci b0 None).
           {
-            intros. destruct o, o0.
+            simpl in H2. tauto. 
+          }
+          {
+            reflexivity.
+          }
+        }
+      * intros. simpl. destruct a.
+        {
+          specialize (H3 (0, 0) (0, 0)). simpl in H3.  tauto.
+        }
+        {
+          split; [reflexivity|]. apply lista_equiv_nil. apply listAll_nth. intros. specialize (H2 (0, S ci)). simpl in H2. unfold _allocated in H2. simpl in H2. simpl.  destruct (nth ci b0 None).
+          {
+            simpl in H2. tauto. 
+          }
+          {
+            reflexivity.
+          }
+        }
+      * intros. split.
+        {
+          destruct a, c.
+          {
+            simpl. apply lista_equiv_nth.  intros. specialize (H3 (0, 0) (0, ci)). simpl in H3.  auto.        }
+          {
+            specialize (H2 (0, 0)). simpl in H2. unfold _allocated in H2. simpl in H2. tauto. 
+          }
+          {
+            specialize (H2 (0, 0)). simpl in H2. unfold _allocated in H2. simpl in H2. tauto. 
+          }
+          {
+            reflexivity.
+          }
+        }
+        {
+          apply H.
+          {
+            clear H H3. intros. destruct v. destruct n.
             {
-              clear H2. simpl. destruct l2, l3.  simpl. specialize (H3 (0, 0)). Opaque equiv. simpl in H3.  unfold _read in H3. simpl in H3.  Transparent equiv.
-              split. apply equiv_lista. intros. specialize (H3 (0, ci)). simpl in H3.  auto. auto.
+              specialize (H2 (0, S n0)).  simpl in *. unfold _allocated in *. simpl in *. auto.
             }
             {
-              clear H3. specialize (H2 (0,0)). compute in H2. tauto.
-            }
-            {
-              clear H3. specialize (H2 (0,0)). compute in H2. tauto.
-            }
-            {
-              simpl.  auto.
+              specialize (H2 (S n, n0)).  simpl in *. unfold _allocated in *. simpl in *. auto.
             }
           }
           {
-            intros. split.
+            clear H H2. intros. destruct v, p. destruct n.
             {
-              clear H. destruct o, o0. apply equiv_nth_equiv_lista_truncate.
+              specialize (H3 (0, S n0) (n1, n2)). simpl in *. unfold _read in *. unfold checkAddrPredS, checkAddrPred in *. simpl (addrToRowS @ _) in *. simpl (addrToTableS @ _) in *. simpl (predToTableS @ _) in *. simpl (predToColS @ _) in *. normalize. normalizeHyp H3. simpl (fst _) in *. simpl (snd _) in *. destruct (eqbS @ 0 @ n1).
               {
-                reflexivity.
+                simpl in *. auto.
               }
               {
-                intros. 
-                clear H2.  simpl. specialize (H3 (0, 1 + length b0) (0, ci)).
-                Opaque equiv lista_nth length plus map lista_truncate.
-                compute in H3.
-                Transparent equiv lista_nth length plus map lista_truncate.
-                rewrite map_cons in H3.
-                rewrite lista_nth_ge_length in H3.
-                rewrite lista_nth_ge_length in H3.
-                simpl in H3.
-                rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.
-                rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.  auto. auto. auto. simpl. rewrite length_map. constructor.
-                rewrite length_map. apply Nat.le_0_l.
-              }
-              {
-                clear H3. specialize (H2 (0, 1 + length b0)). destruct H2.  clear H0. simpl in H. unfold _allocated in H. Opaque lista_nth. simpl in H.  rewrite lista_nth_ge_length in H. rewrite lista_nth_ge_length in H.  simpl in H. tauto. simpl. rewrite length_map. auto. apply Nat.le_0_l.
-                
-              }
-              {
-                clear H3. specialize (H2 (0, 1 + length b0)). destruct H2.  clear H. simpl in H0. unfold _allocated in H0. Opaque lista_nth. simpl in H0.  rewrite lista_nth_ge_length in H0. rewrite lista_nth_ge_length in H0.  simpl in H0. tauto. apply Nat.le_0_l. simpl. rewrite length_map. auto. 
-              }
-              {
-                reflexivity.
-              }
-            }
-            { 
-              split.
-              {
-                clear H. destruct a, o. apply equiv_nth_equiv_lista_truncate.
-                {
-                  reflexivity.
-                }
-                {
-                  intros. 
-                  clear H2.  simpl. specialize (H3 (0,0) (0, ci)).
-                  Opaque equiv lista_nth length plus map lista_truncate.
-                  compute in H3.
-                  Transparent equiv lista_nth length plus map lista_truncate.
-                  rewrite map_cons in H3.
-                  simpl in H3.
-                  rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.
-                  rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.  auto. auto. auto. 
-                }
-                {
-                  clear H3. specialize (H2 (0, 0)). destruct H2.  clear H. simpl in H0. unfold _allocated in H0. simpl in H0.  tauto.                   
-                }
-                {
-                  clear H3. specialize (H2 (0, 0)). destruct H2.  clear H0. simpl in H. unfold _allocated in H. simpl in H.  tauto. 
-                }
-                {
-                  reflexivity.
-                }
-              }
-              {
-                apply H.
-                {
-                  intros. destruct v. destruct n.
-                  {
-                    specialize (H2 (0, S n1)). simpl in H2. unfold _allocated in H2. simpl in H2. simpl. unfold _allocated. simpl. destruct n1. exact H2. exact H2.
-                  }
-                  {
-                    specialize (H2 (S n, n1)). simpl in H2. unfold _allocated in H2. simpl in H2. unfold _nthTraversal, _nthTraversal' in H2. simpl in H2. simpl. unfold _allocated. simpl. unfold _nthTraversal, _nthTraversal'. simpl.  exact H2. 
-                  }
-                }
-                {
-                  clear H H2. intros. destruct v. destruct n.
-                  {
-                    specialize (H3 (0, S n1) p). simpl in H3. unfold _read in H3. simpl in H3. simpl. unfold _read. simpl. destruct n1. exact H3. exact H3.
-                  }
-                  {
-                    specialize (H3 (S n, n1) p). simpl in H3. unfold _read in H3. simpl in H3.  unfold _nthTraversal, _nthTraversal' in H3. simpl in H3. simpl. unfold _read. simpl.  unfold _nthTraversal, _nthTraversal'. simpl. exact H3.                     
-                  }
-                }
-              }
-            }
-          }
-          {
-            intros. split.
-            {
-              clear H. destruct a, o0. apply equiv_nth_equiv_lista_truncate.
-              {
-                reflexivity.
-              }
-              {
-                intros. 
-                clear H2.  simpl. specialize (H3 (0, 0) (0, ci)).
-                simpl in H3.
-                rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.
-                rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.  auto. auto. auto. 
-              }
-              {
-                clear H3. specialize (H2 (0, 0)). destruct H2.  clear H0. simpl in H. unfold _allocated in H.  simpl in H.  tauto.                 
-              }
-              {
-                clear H3. specialize (H2 (0,0)). destruct H2.  clear H. simpl in H0. unfold _allocated in H0. simpl in H0. tauto. 
-              }
-              {
-                reflexivity.
+                simpl in *. auto.
               }
             }
             {
-              apply H.
-              {
-                intros. destruct v. destruct n.
-                {
-                  specialize (H2 (0, S n1)). simpl in H2. unfold _allocated in H2. simpl in H2. simpl. unfold _allocated. simpl. destruct n1. exact H2. exact H2.
-                }
-                {
-                  specialize (H2 (S n, n1)). simpl in H2. unfold _allocated in H2. simpl in H2. unfold _nthTraversal, _nthTraversal' in H2. simpl in H2. simpl. unfold _allocated. simpl. unfold _nthTraversal, _nthTraversal'. simpl.  exact H2. 
-                }
-              }
-              {
-                clear H H2. intros. destruct v. destruct n.
-                {
-                  specialize (H3 (0, S n1) p). simpl in H3. unfold _read in H3. simpl in H3. simpl. unfold _read. simpl. destruct n1. exact H3. exact H3.
-                }
-                {
-                  specialize (H3 (S n, n1) p). simpl in H3. unfold _read in H3. simpl in H3.  unfold _nthTraversal, _nthTraversal' in H3. simpl in H3. simpl. unfold _read. simpl.  unfold _nthTraversal, _nthTraversal'. simpl. exact H3. 
-                    
-                }
-              }
+              specialize (H3 (S n, n0) (n1, n2)). simpl in *. auto. 
             }
           }
+        }
+    + apply H.
+      * intros. clear H H1 H2 H3. specialize (H0 (S t0)). simpl in *. unfold _typeOfHeap in *. simpl in *. split.
+        {
+          intros. apply lt_S_n. apply H0. apply lt_n_S. auto.
+        }
+        {
+          intros. apply lt_S_n. apply H0. apply lt_n_S. auto.
+        }
+      * intros. clear H H0 H2 H3 . destruct p.  specialize (H1  (S n, n0) (S t0)). split.
           {
-            intros. split.
-            {
-              clear H. destruct a, c. apply equiv_nth_equiv_lista_truncate.
-              {
-                reflexivity.
-              }
-              {
-                intros. 
-                clear H2.  simpl. specialize (H3 (0, 0) (0, ci)).
-                simpl in H3.
-                rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.
-                rewrite eq_lista_nth_lista_truncate_lt_lista_nth in H3.  auto. auto. auto. 
-              }
-              {
-                clear H3. specialize (H2 (0, 0)). destruct H2.  clear H0. simpl in H. unfold _allocated in H.  simpl in H.  tauto.                 
-              }
-              {
-                clear H3. specialize (H2 (0,0)). destruct H2.  clear H. simpl in H0. unfold _allocated in H0. simpl in H0. tauto. 
-              }
-              {
-                reflexivity.
-              }
-            }
-            {
-              apply H.
-              {
-                intros. destruct v. destruct n.
-                {
-                  specialize (H2 (0, S n1)). simpl in H2. unfold _allocated in H2. simpl in H2. simpl. unfold _allocated. simpl. destruct n1. exact H2. exact H2.
-                }
-                {
-                  specialize (H2 (S n, n1)). simpl in H2. unfold _allocated in H2. simpl in H2. unfold _nthTraversal, _nthTraversal' in H2. simpl in H2. simpl. unfold _allocated. simpl. unfold _nthTraversal, _nthTraversal'. simpl.  exact H2. 
-                }
-              }
-              {
-                clear H H2. intros. destruct v. destruct n.
-                {
-                  specialize (H3 (0, S n1) p). simpl in H3. unfold _read in H3. simpl in H3. simpl. unfold _read. simpl. destruct n1. exact H3. exact H3.
-                }
-                {
-                  specialize (H3 (S n, n1) p). simpl in H3. unfold _read in H3. simpl in H3.  unfold _nthTraversal, _nthTraversal' in H3. simpl in H3. simpl. unfold _read. simpl.  unfold _nthTraversal, _nthTraversal'. simpl. exact H3.                     
-                }
-              }
-            }
-          }
-        * destruct n. inversion l2. specialize (H1 (0, n) 0). destruct H1 as [H4 H1]. clear H1 H0 H2 H3. compute in H4. assert (0 = 0 /\ S n <= S n) as e. auto. specialize (H4 e). destruct H4. pose (nat_int _ _ l2) as e0. contradiction. 
-      + apply H.
-        * intros. clear H H1 H2 H3. specialize (H0 (S t0)). destruct H0. split.
-          {
-            intros. clear H0. 
-            simpl in *. unfold _typeOfHeap in *. simpl in H. apply lt_S_n.  apply H. apply lt_n_S. auto.
+            intros.  
+            simpl in *. unfold _predOfType in *. auto. 
           }
           {
-            intros. clear H. 
-            simpl in *. unfold _typeOfHeap in *. simpl in H0. apply lt_S_n.  apply H0. apply lt_n_S. auto.
-          }          
-        * intros. clear H H0 H2 H3 . destruct p.  specialize (H1  (S n, n0) (S t0)). destruct H1. split.
+            intros. 
+            simpl in *. unfold _predOfType in *. auto. 
+          }
+        * intros. clear H H0 H1 H3. destruct v. specialize (H2 (S n , n0)). split.
           {
-            intros. clear H0. 
-            simpl in *. unfold _predOfType in *. split. tauto. rewrite widthGetter_cons in H. rewrite widthGetter_cons in H.  apply H. split. simpl. f_equal. tauto. tauto.
+            intros. 
+            simpl in *. unfold _allocated  in *. simpl in *. apply H2.   auto. 
           }
           {
-            intros. clear H. 
-            simpl in *. unfold _predOfType in *. split. tauto.  rewrite widthGetter_cons in H0. rewrite widthGetter_cons in H0.  apply H0. split. simpl. f_equal. tauto. tauto.
-          }
-        * intros. clear H H0 H1 H3. destruct v. specialize (H2 (S n , n0)). destruct H2. split.
-          {
-            intros. clear H0. 
-            simpl in *. unfold _allocated  in *. simpl (addrToTableS @ _) in *. rewrite maybeRowGetter_cons in H. rewrite maybeRowGetter_cons in H. simpl (addrToRowS @ _) in *. auto. 
-          }
-          {
-            intros. clear H. 
-            simpl in *. unfold _allocated  in *. simpl (addrToTableS @ _) in *. rewrite maybeRowGetter_cons in H0. rewrite maybeRowGetter_cons in H0. simpl (addrToRowS @ _) in *. auto. 
+            intros. 
+            simpl in *. unfold _allocated  in *. simpl in *. apply H2. auto. 
           }
         * intros. clear H H0 H1 H2. destruct v, p. specialize (H3 (S n, n0) (S n1, n2)).  rewrite read_cons in H3. rewrite read_cons in H3. auto.
   Qed.
@@ -664,40 +533,55 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     intros val ? ?. destruct val.
     - inversion H.
     - simpl in H. rewrite H. reflexivity.
-    - inversion H.
   Qed.
-
-  Lemma cellGetter_maybeRowGetter :
-    forall ti ri ci h,
-      (maybeRowGetter @ ti @ ri @ h == None \/ maybeRowGetter @ ti @ ri @ h == Some None) ->
-      cellGetter @ ti @ ri @ ci @ h == None.
-  Proof.
-    intros. unfold cellGetter, _cellGetter.  normalize. unfold maybeRowGetter, _maybeRowGetter in H. unfold injF2 in H. repeat rewrite eval_injF in H. unfold matrixCellTraversal. unfold matrixRowTraversal. repeat rewrite comp_associativity. rewrite nthTraversal_comp_preview. rewrite matrixRowsLens_comp_preview.  rewrite listaNthLens_comp_preview. unfold compM, _compM. normalize.
-    rewrite (@comp_compM (lista (maybe row)) (maybe row) sqlVal _ _ _ maybe (@maybeS) maybe_Monad ) . 
-    rewrite (@comp_compM (matrixp sqlVal) (lista (maybe row)) sqlVal _ _ _ maybe (@maybeS) maybe_Monad ) . rewrite <- compM_associativity. rewrite <- (associativity_compM maybe_Monad _ _ _ _ _ _ (previewS @ (nthTraversal @ ti) @ h) (ret ∘ view matrixRowsLens >=> ret ∘ view (listaNthLens ri)) (previewS @ (maybePrism ∘ listaNthLens ci))).
-    destruct H.
-    rewrite comp_associativity in H. rewrite nthTraversal_comp_preview in H. rewrite matrixRowsLens_comp_preview in H. unfold compM, _compM in H. unfold injF2 in H. repeat rewrite eval_injF in H.
-    rewrite (comp_compM (view matrixRowsLens) (eval previewS (listaNthLens ri))) in H. rewrite H. reflexivity.
-    rewrite comp_associativity in H. rewrite nthTraversal_comp_preview in H. rewrite matrixRowsLens_comp_preview in H. unfold compM, _compM in H. unfold injF2 in H. repeat rewrite eval_injF in H.
-    rewrite (comp_compM (view matrixRowsLens) (eval previewS (listaNthLens ri))) in H. rewrite H. reflexivity.
-  Qed.
-
-  Lemma some_ret : forall A (AS : Setoid A) (a : A),
+Require Import MonadUtils.
+  
+  (*Lemma some_ret : forall A (AS : Setoid A) (a : A),
                      Some a == ret @ a.
   Proof.
     reflexivity.
-  Qed.
+  Qed. *)
 
-  Opaque equiv.
-  
+
+
+  Arguments row / .
+  Arguments rowS / .
+  Arguments SQLValType.valS /.
+  Arguments maybe A {SA} / .
+  Arguments maybeS {A} SA / .
+  Arguments table / .
+  Arguments caseMaybe {A B AS BS} some none val1 / .
+  Arguments _predOfType pred1 type1 h / .
+  Arguments _update addr pred1 val1 h / .
+  Arguments _readType addr h /.
+  Arguments checkAddrPred addr pred1 /.
+  Arguments _allocated addr h /.
+  Arguments _read addr pred1 h /.
+  Arguments _delete addr h /.
+  Arguments deleteRow table rowid h / .
+  Arguments id {A} x / .
+  Arguments _MatrixRowsLens_set {A AS AP} l r m /.
+  Arguments _newAddr type1 h / .
+  Arguments getNewAddr type1 h / .
+  Arguments newRowId table h / .
+  Arguments tableS / .
+  Arguments emptyH /. 
+  Arguments insertRow table h / .
+
+                  
+
   Lemma read_unallocated_addr:
     forall h pred1 addr,
       ~ allocated @ addr @ h -> read @ addr @ pred1 @ h == None.
   Proof.
-    intros. simpl in *. unfold _allocated in H.  unfold _read. destruct (checkAddrPredS @ addr @ pred1).
-    - rewrite some_ret. normalize_monad. unfold constS. normalize. apply cellGetter_maybeRowGetter. destruct (maybeRowGetter @ (addrToTableS @ addr) @ (addrToRowS @ addr) @ h).
-      + right. destruct o. destruct H. unfold caseMaybeS, caseMaybe. simpl. auto. reflexivity.
-      + left. reflexivity.
+    intros. destruct addr, pred1. simpl in *. destruct ( (n =? n1)).
+    - simpl in *.
+      destruct (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h n).
+      destruct (@lista_nth (option (lista sqlVal))
+       (@optionS (lista sqlVal) (@listaS sqlVal sqlValS sqlVal_Pointed))
+       (maybe_Pointed (lista sqlVal)) n0
+       (@_rows sqlVal sqlValS sqlVal_Pointed m)).
+      tauto. reflexivity. reflexivity.
     - simpl. reflexivity.
   Qed.
 
@@ -705,11 +589,12 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     forall h addr,
       ~ allocated @ addr @ h -> readType @ addr @ h == None.
   Proof.
-    intros. simpl in *. unfold _allocated in H. unfold _readType. destruct (maybeRowGetter @ (addrToTableS @ addr) @ (addrToRowS @ addr) @ h).
-    - simpl in *. unfold caseMaybe in *. destruct o.
-      + simpl in *. tauto.
-      + reflexivity.
-    - simpl in *. reflexivity.
+    intros. destruct addr. simpl in *. destruct (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h n).
+    - destruct (@lista_nth (option (lista sqlVal))
+       (@optionS (lista sqlVal) (@listaS sqlVal sqlValS sqlVal_Pointed))
+       (maybe_Pointed (lista sqlVal)) n0
+       (@_rows sqlVal sqlValS sqlVal_Pointed m)). tauto. reflexivity. 
+    - reflexivity.
   Qed.
 
 
@@ -717,187 +602,835 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     forall h addr pred val2,
       ~ allocated @ addr @ h -> h [ addr , pred ↦  val2 ] == h.
   Proof.
-    intros. simpl in *. unfold _allocated in H. unfold _update. destruct (checkAddrPredS @ addr @ pred).
-    - rewrite some_ret. normalize_monad.
-      rewrite (@left_unit _ _ maybe_Monad _ _ _ _ u (constS unitS @ (ret @ (cellSetter @ (addrToTableS @ addr) @ (addrToRowS @ addr) @ (predToColS @ pred) @ val2 @ h)))). unfold constS. normalize. rewrite <- some_ret. unfold caseMaybeS, caseMaybe. normalize. unfold idS, id. normalize. unfold cellSetter, _cellSetter. normalize. unfold setS. normalize. rewrite (nthTraversal_set _ _ sqlVal sqlValS (addrToTableS @ addr) (matrixCellTraversal (addrToRowS @ addr) (predToColS @ pred)) val2 h). destruct addr. simpl (addrToTableS @ _) in *. simpl (addrToRowS @ _) in *. unfold maybeRowGetter, _maybeRowGetter, injF2 in H. repeat rewrite eval_injF in H. rewrite comp_associativity in H. rewrite nthTraversal_comp_preview in H. unfold compM, _compM, injF2 in H.  repeat rewrite eval_injF in H.  destruct (maybe_case (@previewS (list (@matrixp sqlVal sqlVal_Pointed))
-      (@matrixp sqlVal sqlVal_Pointed)
-      (@listS (@matrixp sqlVal sqlVal_Pointed)
-         (@matrixpS sqlVal sqlValS sqlVal_Pointed))
-      (@matrixpS sqlVal sqlValS sqlVal_Pointed) @
-    (@nthTraversal
-       (@ConstMaybe (@matrixp sqlVal sqlVal_Pointed)
-          (@matrixpS sqlVal sqlValS sqlVal_Pointed))
-       (@ConstMaybeS (@matrixp sqlVal sqlVal_Pointed)
-          (@matrixpS sqlVal sqlValS sqlVal_Pointed))
-       (@ConstMaybeFunctor (@matrixp sqlVal sqlVal_Pointed)
-          (@matrixpS sqlVal sqlValS sqlVal_Pointed))
-       (@ConstMaybe_Applicative (@matrixp sqlVal sqlVal_Pointed)
-          (@matrixpS sqlVal sqlValS sqlVal_Pointed))
-       (@matrixp sqlVal sqlVal_Pointed)
-       (@matrixpS sqlVal sqlValS sqlVal_Pointed) @ n) @ h)).
-      + rewrite H0 in *. simpl. reflexivity.
-      + destruct H0 as [m H0]. rewrite H0 in *. unfold caseMaybeS, caseMaybe.  normalize. rewrite some_ret in H. rewrite (left_unit _ _ _ _ m ( previewS @ (matrixRowsLens ∘ listaNthLens n0))) in H. rewrite matrixRowsLens_comp_preview in H. unfold comp in H. repeat rewrite eval_injF in H.
-      unfold matrixCellTraversal, matrixRowTraversal. repeat rewrite comp_associativity.  unfold comp at 1. normalize. rewrite matrixRowsLens_comp_set. unfold comp at 1. normalize. rewrite listaNthLens_comp_set. rewrite comp_eval.
-      rewrite listaNthLens_preview_view in H. destruct  (maybe_case (@view (lista (@maybe (lista sqlVal) (@listaS sqlVal sqlValS)))
-        (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-        (@listaS (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-           (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)))
-        (@optionS (lista sqlVal) (@listaS sqlVal sqlValS))
-        (@listaNthLens
-           (@ConstFunc (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-              (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)))
-           (@ConstS (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-              (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)))
-           (ConstFunctor (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-              (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)))
-           (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-           (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)) n0) @
-      (@view (@matrixp sqlVal sqlVal_Pointed)
-         (lista (@maybe (lista sqlVal) (@listaS sqlVal sqlValS)))
-         (@matrixpS sqlVal sqlValS sqlVal_Pointed)
-         (@listaS (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-            (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)))
-         (@matrixRowsLens
-            (@ConstFunc
-               (lista (@maybe (lista sqlVal) (@listaS sqlVal sqlValS)))
-               (@listaS (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-                  (@optionS (lista sqlVal) (@listaS sqlVal sqlValS))))
-            (@ConstS (lista (@maybe (lista sqlVal) (@listaS sqlVal sqlValS)))
-               (@listaS (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-                  (@optionS (lista sqlVal) (@listaS sqlVal sqlValS))))
-            (ConstFunctor
-               (lista (@maybe (lista sqlVal) (@listaS sqlVal sqlValS)))
-               (@listaS (@maybe (lista sqlVal) (@listaS sqlVal sqlValS))
-                  (@optionS (lista sqlVal) (@listaS sqlVal sqlValS)))) sqlVal
-            sqlValS sqlVal_Pointed) @ m))).
-        * clear H. rewrite H1. rewrite maybePrism_comp_set. simpl (caseMaybeS @ _ @ _ @ _). rewrite <- H1. rewrite listaNthLens_view_set. rewrite matrixRowsLens_view_set.  unfold flipS. normalize. apply (nthTraversal_preview_set (matrixp sqlVal) (matrixpS sqlValS) n m h). left. rewrite H0. reflexivity.
-        * destruct H1. rewrite H1 in *. simpl in H. tauto.
+    intros. destruct addr, pred. simpl in *. destruct ( (n =? n1)).
+    - simpl in *.
+      destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h n)).
+      + rewrite H0 in *. reflexivity.
+      + destruct H0.  rewrite H0 in *. destruct (@lista_nth (option (lista sqlVal))
+       (@optionS (lista sqlVal) (@listaS sqlVal sqlValS sqlVal_Pointed))
+       (maybe_Pointed (lista sqlVal)) n0
+       (@_rows sqlVal sqlValS sqlVal_Pointed x)).
+        * tauto.
+        * simpl in *. apply (list_update_list_nth table tableS n x h). simpl. rewrite H0. reflexivity.
     - reflexivity.
   Qed.
+
   
-  Axiom delete_unallocated_addr :
+  Lemma delete_unallocated_addr :
     forall h addr,
       ~ allocated @ addr @ h -> delete @ addr @ h == h.
-
-  Axiom readType_allocated_addr:
+  Proof.
+    intros. destruct addr. simpl in *. destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h n)).
+    - rewrite H0 in *. reflexivity.
+    - destruct H0. rewrite H0 in *. simpl in *. destruct x.
+      simpl in *. destruct (maybe_case (@lista_nth (option (lista sqlVal))
+          (@optionS (lista sqlVal) (@listaS sqlVal sqlValS sqlVal_Pointed))
+          (maybe_Pointed (lista sqlVal)) n0 l0)).
+      + rewrite H1 in H. auto. rewrite <- H1. rewrite lista_update_lista_nth. rewrite list_update_list_nth.  reflexivity. rewrite H0. reflexivity.
+      +  destruct H1. rewrite H1 in H. tauto. 
+  Qed.
+  
+  Lemma readType_allocated_addr:
     forall h addr,
       allocated @ addr @ h -> exists type1, readType @ addr @ h == Some type1.
-
-  Axiom read_diff_pred :
+  Proof.
+    intros. destruct addr.  simpl in *. destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h n)).
+    - rewrite H0 in *. tauto. 
+    - destruct H0. rewrite H0 in *. destruct x. simpl in *. destruct ( lista_nth n0 l0).  
+      + exists n. reflexivity.
+      + tauto.
+  Qed.
+  
+  Lemma read_diff_pred :
     forall h val pred t,
       readType @ val @ h == Some t -> 
       ~ predOfType @ pred @ t @ h ->
       h [ val , pred ] == None.
+  Proof.
+    intros. destruct val, pred. simpl in *.  destruct (bool_case (n =? n1)). 
+    - rewrite H1. destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h n)).
+      + rewrite H2. reflexivity.
+      + destruct H2. rewrite H2 in *. destruct x. simpl in *. destruct ( lista_nth n0 l0).
+        * apply H0. rewrite <- H. apply Nat.eqb_eq. auto. 
+        * reflexivity.  
+    - rewrite H1.  reflexivity. 
+  Qed.
 
-  Axiom update_diff_pred :
+  Lemma update_diff_pred :
     forall h val pred val2 t,
       readType @ val @ h == Some t -> 
       ~ predOfType @ pred @ t @ h ->
       h [ val , pred ↦ val2 ] == h.
+  Proof.
+    intros. destruct val, pred. simpl in *. normalize. destruct (bool_case (n =? n1)). rewrite H1.
+    - simpl in *. destruct (maybe_case (nth_error h n)).
+      + simpl in *. rewrite H2 in *. reflexivity.
+      + simpl in *.  destruct H2. rewrite H2 in *. destruct x. destruct (maybe_case (lista_nth n0 l0)).
+        * simpl in *. rewrite H3 in *. rewrite (list_update_list_nth _ _ n (matrixpCons _ l0) h). reflexivity. simpl in *. rewrite H2.   reflexivity. 
+        * simpl in *. destruct H3.   rewrite H3 in *. destruct H0. rewrite <- H. apply Nat.eqb_eq. auto.
+    - rewrite H1. reflexivity.
+  Qed.      
 
-  Axiom allocated_empty : forall v, ~ allocated @ v @ emptyH.
+  Lemma allocated_empty : forall v, ~ allocated @ v @ emptyH.
+  Proof.
+    intros. destruct v. simpl.  destruct n.
+    - simpl. auto.
+    - simpl. auto.
+  Qed.
   
-  Axiom allocated_newAddr_1:
+
+  Lemma allocated_newAddr_1:
     forall h type1 addr h',
       Some (h', addr) == newAddr @ type1 @ h -> ~ allocated @ addr @ h.
+  Proof.
+    intros. destruct addr. simpl in *. destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h type1)).
+    - rewrite H0 in H. auto.
+    -  destruct H0. destruct x. rewrite H0 in H.   simpl in H. destruct H as [? [? ?]].  rewrite H1. clear H1. rewrite H0. simpl.  destruct (maybe_case (lista_nth n0 l0)).
+       + simpl in *. rewrite H1. auto.
+       + destruct H1. clear H H0. assert False ; [|tauto]. generalize H1 H2. clear H1 H2. destruct l0. apply nat_list_ind_2 with (l1:= n0)(l2:=l0).
+         * intros. simpl in *. inversion H1.
+         * intros. simpl in *. rewrite H1 in H2. clear H H1. pose (list_findan_ge _ _ _ b 1 maybe_row_equiv_dec) as g.  simpl in g. rewrite <- H2 in g. inversion g.
+         * intros. simpl in *. inversion H1.
+         * intros. apply H;[ auto |]. clear H H1. destruct c.
+           {
+             simpl in H2.   rewrite  (list_findan_plus _ _ _ d 0 1 maybe_row_equiv_dec) in H2.  rewrite <- plus_n_Sm in H2.  inversion H2. auto.
+           }
+           {
+             simpl in *. inversion H2.
+           }
+  Qed.
   
-  Axiom allocated_newAddr_2:
+ 
+  Lemma allocated_newAddr_2:
     forall h type1 addr h',
       Some (h', addr) == newAddr @ type1 @ h -> allocated @ addr @ h'.
-
-  Axiom readType_newAddr:
+  Proof. 
+    intros. destruct addr. simpl in *. destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h type1)).
+    - rewrite H0 in H. tauto.
+    - destruct H0. destruct x. rewrite H0 in H.  simpl in H. destruct H as [? [? ?]].  destruct (maybe_case (@nth_error (@matrixp sqlVal sqlValS sqlVal_Pointed) h' n)).
+      + rewrite H3. Unset Printing Implicit. rewrite H1 in *. clear H1. pose (eq_equiv H3) as H1. 
+        rewrite H in H1.  rewrite ( list_nth_list_update  _ _ type1 (matrixpCons sqlVal
+                 (lista_update (lista_finda maybe_row_equiv_dec l0) l0
+                               (Some lista_repeat))) (matrixpCons sqlVal l0) h) in H1.
+        inversion H1. auto.
+      + destruct H3. rewrite H3. destruct x. simpl in *. pose (eq_equiv H3) as H4. 
+        rewrite H in H4.  rewrite H1 in H4. simpl in *. rewrite ( list_nth_list_update  _ _ type1 (matrixpCons sqlVal
+                 (lista_update (lista_finda maybe_row_equiv_dec l0) l0
+                               (Some lista_repeat))) (matrixpCons sqlVal l0) h) in H4.
+        * simpl in H4. destruct (maybe_case (lista_nth n0 l1)).
+          {
+            simpl in *. rewrite H5. pose (eq_equiv H5) as e.
+            rewrite <- H4 in e.  rewrite <- H2 in e. rewrite lista_nth_lista_update in e. inversion e.
+          }
+          
+          {
+            destruct H5. simpl in *. rewrite H5. auto.
+          }
+        * auto. 
+  Qed.
+  
+  Lemma readType_newAddr:
     forall h type1 addr h',
       Some (h', addr) == newAddr @ type1 @ h -> readType @ addr @ h' == Some type1.
+  Proof. 
+    intros. destruct addr. destruct (maybe_case (nth_error h type1)).
+    - simpl in *. rewrite H0 in H. tauto.
+    - destruct H0. destruct x. simpl in *. rewrite H0 in H.   simpl in H. destruct H as [? [? ?]].  rewrite H1. clear H1.  simpl. destruct (maybe_case (nth_error h' type1)).
+      * simpl in *. rewrite H1. pose (eq_equiv H1) as e. rewrite H in e. rewrite ( list_nth_list_update ) with (a':=matrixpCons sqlVal l0) in e. inversion e. auto. 
+      * destruct H1. simpl in *. rewrite H1. destruct x. simpl in *. destruct (maybe_case (lista_nth n0 l1)).
+        {
+          simpl in *. rewrite H3. pose (eq_equiv H1) as e. rewrite H in e. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0) in e. simpl in e. pose (eq_equiv H3) as e0. rewrite <- e in e0. rewrite <- H2 in e0. rewrite lista_nth_lista_update in e0. inversion e0. auto.
+        }
+        {
+          destruct H3. simpl in *. rewrite H3. reflexivity.
+        }
+  Qed.
 
-  Axiom read_update :
+  Lemma read_update :
     forall h val pred val2 t,
       readType @ val @ h == Some t -> 
       predOfType @ pred @ t @ h ->
       h [ val , pred ↦  val2 ] [ val , pred ] == Some val2.
-  
-  Axiom read_update_diff_addr :
+  Proof.
+    intros. destruct val, pred. simpl in *. destruct (bool_case (n =? n1)).
+    - rewrite H1 in *. simpl in *. destruct (maybe_case (nth_error h n)).
+      + simpl in *. rewrite H2 in *. inversion H. 
+      + simpl in *. destruct H2. rewrite H2 in *. destruct x.  simpl in *. destruct (maybe_case (lista_nth n0 l0)).
+        * simpl in *. rewrite H3 in *. inversion H. 
+        * simpl in *. destruct H3. rewrite H3 in *.   rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0).
+          {
+            simpl in *.
+            destruct (maybe_case (lista_nth n0 (lista_update n0 l0 (Some (lista_update n2 x val2))))).
+            {
+              simpl in *. rewrite H4 in *. pose (eq_equiv H4) as e. rewrite lista_nth_lista_update in e.  inversion e.
+            }
+            {
+              simpl in *. destruct H4. rewrite H4 in *. pose (eq_equiv H4) as e. rewrite (lista_nth_lista_update) in e. simpl in e. rewrite <- e. rewrite lista_nth_lista_update. reflexivity.
+            }
+          }
+          {
+            auto.
+          }
+    - simpl in *. rewrite H1 in *. destruct (maybe_case (nth_error h n)).
+      + simpl in *. rewrite H2 in *. tauto.
+      + simpl in *. destruct H2. rewrite H2 in *. destruct x.  simpl in *. destruct (maybe_case (lista_nth n0 l0)).
+        * simpl in *. rewrite H3 in *. tauto.
+        * simpl in *. destruct H3. rewrite H3 in *. assert (n<>n1). apply Nat.eqb_neq. auto. congruence.
+  Qed.               
+
+  Lemma read_update_diff_addr :
     forall h val val' pred pred' val2,
       val <> val' ->
       h [ val , pred ↦ val2 ] [ val' , pred' ] == h [ val' , pred' ].
+  Proof.
+    intros. destruct val, pred, val', pred'. simpl in *. destruct (bool_case (n3 =? n5)).
+    - rewrite H0. destruct (bool_case (n =? n1)).
+      + rewrite H1. destruct (maybe_case (nth_error h n)).
+        * simpl in *. rewrite H2 in *. reflexivity. 
+        * destruct H2. simpl in *. rewrite H2 in *. destruct x. simpl. destruct (maybe_case (lista_nth n0 l0)). 
+          {
+            simpl in *. rewrite H3. destruct (Nat.eq_dec n n3).
+            {
+              rewrite e. rewrite list_nth_list_update with (a':= matrixpCons sqlVal l0).
+              {
+                rewrite e in *. clear n e. clear H0 H1. rewrite H2. reflexivity.
+              }
+              {
+              congruence.
+              }
+            }
+            {
+               rewrite (list_nth_list_update_diff_index);[|auto]. reflexivity. 
+            }
+          }
+          {
+            destruct H3. simpl in *. rewrite H3. destruct (Nat.eq_dec n n3).
+            {
+              rewrite e. rewrite list_nth_list_update with (a':= matrixpCons sqlVal l0).
+              {
+                simpl. destruct (Nat.eq_dec n0 n4); [congruence|]. rewrite lista_nth_lista_update_diff_index; [| auto].   rewrite e in *. rewrite H2. reflexivity. 
+              }
+              {
+                congruence.
+              }
+            }
+            {
+              rewrite list_nth_list_update_diff_index; [|auto]. reflexivity. 
+            }
+          }
+      + rewrite H1. reflexivity. 
+    - rewrite H0.  reflexivity. 
+  Qed.
   
-  Axiom allocated_update :
+  Lemma allocated_update :
     forall h val pred val2 addr,
       allocated @ addr @ (h [ val , pred ↦  val2 ]) == allocated @ addr @ h.
-
-  Axiom readType_update :
+  Proof.
+    intros. destruct val, pred, addr. simpl. destruct (n =? n1).
+    - destruct (maybe_case (nth_error h n)).
+      + simpl in *. rewrite H. reflexivity. 
+      + simpl in *. destruct H. rewrite H. destruct x. simpl in *. destruct (maybe_case (lista_nth n0 l0)).
+        * simpl in *. rewrite H0. destruct (Nat.eq_dec n n3).
+          {
+            rewrite e in *. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0); [| auto].
+            simpl. rewrite H. simpl. reflexivity.
+          }
+          {
+            rewrite list_nth_list_update_diff_index; [|auto]. reflexivity.
+          }
+        * destruct H0. simpl in *. rewrite H0. destruct (Nat.eq_dec n n3).
+          {
+            rewrite e in *. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0); [| auto].
+            simpl. rewrite H. simpl. destruct (Nat.eq_dec n0 n4).
+            {
+              rewrite e0 in *. rewrite lista_nth_lista_update. rewrite H0. reflexivity.
+            }
+            {
+              rewrite lista_nth_lista_update_diff_index; [|auto]. reflexivity.
+            }
+          }
+          {
+            rewrite list_nth_list_update_diff_index; [|auto]. reflexivity.
+          }
+    - reflexivity.
+  Qed.
+  
+          
+  Lemma readType_update :
     forall h val pred val2 addr,
       readType @ addr @ (h [ val , pred ↦  val2 ]) == readType @ addr @ h.
-
-  Axiom allocated_delete :
+  Proof.
+    intros. destruct val, pred, addr. simpl in *. destruct (n =? n1).
+    - destruct (maybe_case (nth_error h n)).
+      + simpl in *. rewrite H. reflexivity. 
+      + simpl in *. destruct H. rewrite H. destruct x. simpl in *. destruct (maybe_case (lista_nth n0 l0)).
+        * simpl in *. rewrite H0. destruct (Nat.eq_dec n n3).
+          {
+            rewrite e in *. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0); [| auto].
+            simpl. rewrite H. simpl. reflexivity.
+          }
+          {
+            rewrite list_nth_list_update_diff_index; [|auto]. reflexivity.
+          }
+        * destruct H0. simpl in *. rewrite H0. destruct (Nat.eq_dec n n3).
+          {
+            rewrite e in *. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0); [| auto].
+            simpl. rewrite H. simpl. destruct (Nat.eq_dec n0 n4).
+            {
+              rewrite e0 in *. rewrite lista_nth_lista_update. rewrite H0. reflexivity.
+            }
+            {
+              rewrite lista_nth_lista_update_diff_index; [|auto]. reflexivity.
+            }
+          }
+          {
+            rewrite list_nth_list_update_diff_index; [|auto]. reflexivity.
+          }
+    - reflexivity.
+  Qed.
+  
+  Lemma allocated_delete :
     forall h val,
       ~ allocated @ val @ (delete @ val @ h).
-  
-  Axiom allocated_delete_diff_addr :
+  Proof.
+    intros. destruct val. simpl in *. destruct (maybe_case (nth_error h n)).
+    + simpl in *. rewrite H. rewrite H. auto. 
+    + simpl in *. destruct H. rewrite H. destruct x. simpl in *. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0); [| auto]. simpl in *. rewrite lista_nth_lista_update. auto. 
+  Qed.
+
+  Lemma allocated_delete_diff_addr :
     forall h addr1 addr',
       ~ addr1 == addr' ->
-      allocated @ addr' @ (delete @ addr1 @ h) == allocated @ addr1 @ h.
+      allocated @ addr1 @ (delete @ addr' @ h) == allocated @ addr1 @ h.
+  Proof.
+    intros. destruct addr1, addr'.     destruct (Nat.eq_dec n n1).
+    + rewrite e in *.   simpl in *. destruct (maybe_case (nth_error h n1)).
+      {
+        simpl in *. rewrite H0 in *. rewrite H0 in *. reflexivity. 
+      }
+      {
+        destruct H0. simpl in *. rewrite H0.  rewrite list_nth_list_update with (a':=x);[|auto]. destruct x. simpl in *. rewrite lista_nth_lista_update_diff_index. reflexivity. intro. apply H. auto.  
+      }
+    + simpl in *. destruct (maybe_case (nth_error h n)). 
+          {
+            simpl in *. rewrite H0 in *. destruct (maybe_case (nth_error h n1)).
+            {
+              simpl in *. rewrite H1 in *. rewrite H0 in *. reflexivity. 
+            }
+            {
+              destruct H1. simpl in *. rewrite H1 in *. rewrite list_nth_list_update_diff_index;[|auto]. rewrite H0. reflexivity.
+            }
+          }
+          {
+            destruct H0. simpl in *. rewrite H0. destruct (maybe_case (nth_error h n1)).
+            {
+              simpl in *. rewrite H1 in *. rewrite H0 in *. reflexivity. 
+            }
+            {
+              destruct H1. simpl in *. rewrite H1 in *. rewrite list_nth_list_update_diff_index;[|auto]. rewrite H0. reflexivity.
+            }
+          }
+          
+       
+  Qed.
   
-  Axiom read_delete_diff_addr :
+  Lemma read_delete_diff_addr :
     forall h val val' pred,
       ~ val == val' ->
       (delete @ val @ h) [ val' , pred ] == h [val', pred].
+  Proof.
+    intros. destruct val, val', pred.     destruct (Nat.eq_dec n n1).
+    - rewrite e in *.   simpl in *. destruct (bool_case (n1 =? n3)).
+      + rewrite H0. destruct (maybe_case (nth_error h n1)).
+      {
+        simpl in *. rewrite H1 in *. rewrite H1 in *. reflexivity. 
+      }
+      {
+        destruct H1. simpl in *. rewrite H1.  rewrite list_nth_list_update with (a':=x);[|auto]. destruct x. simpl in *. rewrite lista_nth_lista_update_diff_index. reflexivity. intro. apply H. auto.  
+      }
+      + rewrite H0. reflexivity. 
+    - simpl in *. destruct (bool_case (n1 =? n3)).
+      + rewrite H0. destruct (maybe_case (nth_error h n)). 
+          {
+            simpl in *. rewrite H1 in *. reflexivity. 
+          }
+          {
+            destruct H1. simpl in *. rewrite H1. destruct x. rewrite list_nth_list_update_diff_index;[|auto]. reflexivity. 
+          }
+      + rewrite H0. reflexivity.
+       
+  Qed.
 
-  Axiom readType_delete_diff_addr :
+  Lemma readType_delete_diff_addr :
     forall h val val',
+      ~val == val' ->
       readType @ val' @ (delete @ val @ h) == readType @ val' @ h.
+  Proof.
+    intros. destruct val, val'.     destruct (Nat.eq_dec n n1).
+    - rewrite e in *.   simpl in *.  destruct (maybe_case (nth_error h n1)).
+      {
+        simpl in *. rewrite H0 in *. rewrite H0 in *. reflexivity. 
+      }
+      {
+        destruct H0. simpl in *. rewrite H0.  rewrite list_nth_list_update with (a':=x);[|auto]. destruct x. simpl in *. rewrite lista_nth_lista_update_diff_index. reflexivity. intro. apply H. auto.  
+      }
+      
+    - simpl in *.  destruct (maybe_case (nth_error h n)). 
+          {
+            simpl in *. rewrite H0 in *. reflexivity. 
+          }
+          {
+            destruct H0. simpl in *. rewrite H0. destruct x. rewrite list_nth_list_update_diff_index;[|auto]. reflexivity. 
+          }
+  Qed.
   
-  Axiom update_update :
+  Lemma update_update :
     forall h val pred val2 val3,
       h [ val , pred ↦  val2 ] [ val , pred ↦ val3 ] == h  [ val , pred ↦ val3 ].
+  Proof.
+    intros. destruct val, pred.     simpl in *. destruct (bool_case (n =? n1)). 
+    - rewrite H.   simpl in *.  destruct (maybe_case (nth_error h n)).
+      {
+        simpl in *. rewrite H0 in *. rewrite H0 in *. reflexivity. 
+      }
+      {
+        destruct H0. simpl in *. rewrite H0.  destruct x. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]. simpl. rewrite list_update_list_update. destruct (maybe_case (lista_nth n0 l0)).
+        {
+          simpl in *. rewrite H1. simpl. rewrite H1. reflexivity.
+        }
+        {
+          simpl in *. destruct H1. rewrite H1. simpl. rewrite lista_nth_lista_update. rewrite lista_update_lista_update. rewrite lista_update_lista_update. reflexivity.
+        }
+      }
+    - rewrite H. reflexivity.
+  Qed.
   
-  Axiom update_update_diff_addr :
-    forall h val val' pred val2 val3,
-      h [ val , pred ↦  val2 ] [ val' , pred ↦ val3 ] == h [ val' , pred ↦ val3 ] [ val , pred ↦ val3 ].
-  
-  Axiom update_update_diff_pred :
-    forall h val pred pred' val2 val3,
-      h [ val , pred ↦  val2 ] [ val , pred' ↦ val3 ] == h [ val , pred' ↦ val3 ] [ val , pred ↦ val3 ].
 
-  Axiom delete_update :
+  Lemma update_update_diff_addr :
+    forall h val val' pred val2 val3,
+      ~ val == val'->
+      h [ val , pred ↦  val2 ] [ val' , pred ↦ val3 ] == h [ val' , pred ↦ val3 ] [ val , pred ↦ val2 ].
+  Proof.
+    intros. destruct val, val', pred.     simpl in *. destruct (bool_case (n1 =? n3)). 
+    - rewrite H0.   simpl in *.  destruct (bool_case (n =? n3)).
+      + 
+        rewrite H1. simpl in *. assert (n = n1).
+        transitivity n3. apply Nat.eqb_eq. auto. symmetry. apply Nat.eqb_eq. auto.
+        assert (n0 <> n2) as z.
+        intro. apply H. auto. 
+        rewrite H2 in *. clear H2.  destruct (maybe_case (nth_error h n1)).
+        {
+          simpl in *. rewrite H2 in *.  rewrite H2 in *.  reflexivity. 
+        }
+        {
+          destruct H2. simpl in *. rewrite H2. destruct x. simpl. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]. rewrite list_update_list_update. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]. rewrite list_update_list_update. destruct (maybe_case (lista_nth n0 l0)).
+          {
+            simpl in *. rewrite H3. simpl. destruct (maybe_case (lista_nth n2 l0)).
+            {
+              simpl in *. rewrite H4. simpl. 
+              rewrite H3. reflexivity.
+            }
+            {
+              destruct H4. simpl in *. rewrite H4. simpl. 
+              rewrite lista_nth_lista_update_diff_index;[|auto].
+              rewrite H3. reflexivity. 
+            }
+          }
+          {
+            destruct H3. simpl in *. rewrite H3. simpl.
+            rewrite lista_nth_lista_update_diff_index; [| auto]. destruct (maybe_case (lista_nth n2 l0)).
+            {
+              simpl in *. rewrite H4. simpl. 
+              rewrite H3. reflexivity.
+            }
+            {
+              destruct H4. simpl in *. rewrite H4. simpl. 
+              rewrite lista_nth_lista_update_diff_index;[|auto].
+              rewrite H3. rewrite lista_update_lista_update_diff_index;[|auto]. reflexivity. 
+            }
+          }
+        }
+      + rewrite H1. reflexivity. 
+    - rewrite H0. reflexivity.
+  Qed.
+  
+  Lemma update_update_diff_pred :
+    forall h val pred pred' val2 val3,
+      ~ pred == pred' ->
+      h [ val , pred ↦  val2 ] [ val , pred' ↦ val3 ] == h [ val , pred' ↦ val3 ] [ val , pred ↦ val2 ].
+  Proof.
+    intros. destruct val, pred, pred'.     simpl in *. destruct (bool_case (n =? n3)). 
+    - rewrite H0.   simpl in *.  destruct (bool_case (n =? n1)).
+      + 
+        rewrite H1. simpl in *. assert (n1 = n3).
+        transitivity n. symmetry. apply Nat.eqb_eq. auto. apply Nat.eqb_eq. auto.
+        assert (n2 <> n4) as z.
+        intro. apply H. auto. 
+        rewrite H2 in *. clear H2.  destruct (maybe_case (nth_error h n)).
+        {
+          simpl in *. rewrite H2 in *.  rewrite H2 in *.  reflexivity. 
+        }
+        {
+          destruct H2. simpl in *. rewrite H2. destruct x. simpl. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]. rewrite list_update_list_update. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]. rewrite list_update_list_update. destruct (maybe_case (lista_nth n0 l0)).
+          {
+            simpl in *. rewrite H3. simpl. rewrite H3.  reflexivity. 
+          }
+          {
+            destruct H3. simpl in *. rewrite H3. simpl.
+            rewrite lista_nth_lista_update. rewrite lista_update_lista_update. rewrite lista_nth_lista_update.  rewrite lista_update_lista_update.   rewrite lista_update_lista_update_diff_index;[|auto]. reflexivity. 
+          }
+        }
+      + rewrite H1. reflexivity. 
+    - rewrite H0. reflexivity.
+  Qed.
+
+  Lemma delete_update :
     forall h val pred val2,
       delete @ val @ (h [ val , pred ↦  val2 ]) == delete @ val @ h.
-
-  Axiom delete_update_diff_addr :
-    forall h val val' pred val2 val3,
-      delete @ val' @ (h [ val , pred ↦  val2 ]) == (delete @ val' @ h) [ val , pred ↦ val3 ].
+  Proof.
+    intros. destruct val, pred.     simpl in *. destruct (bool_case (n =? n1)). 
+    - rewrite H.   simpl in *.  destruct (maybe_case (nth_error h n)).
+      {
+        simpl in *. rewrite H0 in *. rewrite H0 in *. reflexivity. 
+      }
+      {
+        destruct H0. simpl in *. rewrite H0.  destruct x. rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]. simpl. rewrite list_update_list_update. destruct (maybe_case (lista_nth n0 l0)).
+        {
+          simpl in *. rewrite H1. simpl. reflexivity.
+        }
+        {
+          simpl in *. destruct H1. rewrite H1. simpl. rewrite lista_update_lista_update. reflexivity.
+        }
+      }
+    - rewrite H.   reflexivity.
+  Qed.
   
-  Axiom delete_delete :
+  Lemma delete_update_diff_addr :
+    forall h val val' pred val2,
+      ~ val == val'->
+      delete @ val' @ (h [ val , pred ↦  val2 ]) == (delete @ val' @ h) [ val , pred ↦ val2 ].
+  
+  Proof.
+    intros. destruct val, val', pred.     simpl in *. destruct (bool_case (n =? n3)).
+    + rewrite H0. simpl in *.  destruct (maybe_case (nth_error h n)).
+      {
+        simpl in *. rewrite H1 in *.  destruct (Nat.eq_dec n1 n).
+        {
+          rewrite e in *. rewrite H1. rewrite H1. reflexivity. 
+        }
+        {
+          destruct (maybe_case (nth_error h n1)).
+          {
+            simpl in *. rewrite H2 in *. rewrite H1. reflexivity.
+          }
+          {
+            destruct H2. simpl in *. rewrite H2 in *. destruct x. simpl. 
+            rewrite list_nth_list_update_diff_index;[|auto].  rewrite H1.  reflexivity. 
+          }
+        }
+      }
+      {
+        destruct H1. simpl in *. rewrite H1. destruct x. simpl. destruct (Nat.eq_dec n1 n). 
+        {
+          rewrite e. rewrite H1. simpl. repeat (rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]). repeat rewrite list_update_list_update.  assert (n0 <> n2). intro; apply H; auto.  simpl. rewrite lista_nth_lista_update_diff_index;[|auto]. destruct (maybe_case (lista_nth n0 l0)).
+          {
+            simpl in *. rewrite H3. simpl.  reflexivity.
+          }
+          {
+            destruct H3. simpl in *. rewrite H3. simpl. rewrite lista_update_lista_update_diff_index;[|auto].  reflexivity. 
+          }
+        }
+        {
+          destruct (maybe_case (lista_nth n0 l0)). 
+          {
+            simpl in *. rewrite H2. simpl. destruct (maybe_case (nth_error h n1)).
+            {
+              simpl in *. 
+              rewrite H3. rewrite list_nth_list_update_diff_index;[|auto]. rewrite H3. rewrite H1. simpl. rewrite H2. reflexivity.
+            }
+            {
+              destruct H3. simpl in *. rewrite H3. simpl. 
+              rewrite list_nth_list_update_diff_index;[|auto].
+              rewrite list_nth_list_update_diff_index;[|auto].
+              rewrite H3. rewrite H1.  destruct x. simpl. rewrite H2. rewrite list_update_list_update_diff_index ;[|auto]. reflexivity. 
+            }
+          }
+          {
+            destruct H2. simpl in *. rewrite H2.  destruct (maybe_case (nth_error h n1)).
+            {
+              simpl in *. 
+              rewrite H3. rewrite list_nth_list_update_diff_index;[|auto]. rewrite H3. rewrite H1. simpl. rewrite H2. reflexivity.
+            }
+            {
+              destruct H3. simpl in *. rewrite H3. simpl. 
+              rewrite list_nth_list_update_diff_index;[|auto].
+              rewrite list_nth_list_update_diff_index;[|auto].
+              rewrite H3. rewrite H1.  destruct x. simpl. rewrite H2. rewrite list_update_list_update_diff_index ;[|auto]. reflexivity. 
+            }
+          }
+        }
+      }        
+    + rewrite H0. simpl. reflexivity. 
+  Qed.
+  
+  Lemma delete_delete :
     forall h val val',
       delete @ val' @ (delete @ val @ h) == delete @ val @ (delete @ val' @ h).
+  Proof.
+    intros. destruct val, val'.     simpl in *. destruct (maybe_case (nth_error h n)).
+    {
+      simpl in *. rewrite H in *.  destruct (maybe_case (nth_error h n1)).
+      {
+        simpl in *. rewrite H0 in *.  rewrite H. reflexivity. 
+      }
+      {
+        destruct H0. simpl in *. rewrite H0. destruct x. simpl. destruct (Nat.eq_dec n n1).
+        {
+          rewrite e in *. rewrite H in H0. inversion H0.
+        }
+        {
+          rewrite list_nth_list_update_diff_index; [| auto]. rewrite H. reflexivity.
+        }
+      }
+    }
+    {
+      destruct H. simpl in *. rewrite H.  destruct (Nat.eq_dec n n1).
+      {
+        rewrite e in *.  destruct x. rewrite H. simpl.   repeat (rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0); [|auto]).  simpl. destruct (Nat.eq_dec n0 n2).
+        {
+          rewrite e0 in *. reflexivity.
+        }
+        {
+          rewrite lista_update_lista_update_diff_index; [|auto]. rewrite list_update_list_update. rewrite list_update_list_update. reflexivity. 
+        }
+      }
+      {
+        rewrite list_nth_list_update_diff_index; [| auto]. destruct (maybe_case (nth_error h n1)).
+        {
+          simpl in *. rewrite H0 in *.  rewrite H. reflexivity. 
+        }
+        {
+          destruct H0. simpl in *. rewrite H0. 
+          rewrite list_nth_list_update_diff_index; [| auto]. rewrite H. destruct x, x0. simpl. rewrite list_update_list_update_diff_index;[|auto]. reflexivity.
+        }
+      }
+    }
+  Qed.
 
-  Axiom update_newAddr_1 :
+      
+  Lemma update_newAddr_1 :
     forall h val pred val2 type1 h' addr,
       newAddr @ type1 @ h == Some (h', addr) ->
+      val <> addr ->
       newAddr @ type1 @ (h [ val , pred ↦  val2 ]) == Some (h' [ val , pred ↦  val2 ], addr).
+  Proof.
+    intros. destruct val, pred, addr . destruct (maybe_case (nth_error h type1)).
+    - simpl in *. rewrite H1 in *.  inversion H. 
+    - destruct H1. simpl (newAddr @ _ @ _) in H. simpl in H1. rewrite H1 in H. simpl in H. destruct x.  destruct H as [? [? ?]]. simpl in H. assert (Some (h' [(n, n0), (n1, n2) ↦ val2] , (n3, n4)) == Some ((list_update' type1 h
+           (matrixpCons sqlVal
+              (lista_update (lista_finda maybe_row_equiv_dec l0) l0
+                            (Some lista_repeat)))) [(n, n0), (n1, n2) ↦ val2] , (n3, n4))).
+      apply Some_Proper. split;[| reflexivity]. evalproper. symmetry. auto. rewrite H4. clear H H4. rewrite H2 in *.  clear type1 H2. simpl in H3. simpl. destruct_bool (n =? n1).
+      + destruct_maybe (nth_error h n).
+        * rewrite H1. simpl. assert (n3 <> n).  intro. rewrite H4 in H1.  rewrite  H1 in H2. inversion H2. rewrite list_nth_list_update_diff_index;[|auto]. rewrite H2. split. reflexivity. auto.
+        * destruct x.  simpl. destruct (Nat.eq_dec n n3).
+          {
+            rewrite e in *. simpl. repeat (rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]). rewrite H1 in H4. 
+            inversion H4. rewrite H5 in H3.  rewrite H3 in *. simpl.  assert (n4 <> n0).
+            intro. apply H0. auto.
+            destruct_maybe (lista_nth n0 l1).
+            {
+              repeat rewrite list_update_list_update. simpl.  rewrite H3 in *.
+              rewrite lista_nth_lista_update_diff_index;[|auto]. rewrite H6.  split. reflexivity. auto.
+            }
+            {
+              rewrite list_update_list_update. rewrite list_update_list_update.  rewrite lista_nth_lista_update_diff_index; [| auto]. rewrite H7. simpl. rewrite lista_finda_lista_update. rewrite H3. rewrite lista_update_lista_update_diff_index;[|auto].   split. reflexivity. auto.
+              rewrite H7. intro. inversion H6. intro. inversion H6.
+            }
+          }
+          {
+            rewrite list_nth_list_update_diff_index;[|auto]. rewrite H1.  rewrite list_nth_list_update_diff_index; [| auto]. simpl. rewrite H4. simpl. rewrite list_update_list_update_diff_index; [|auto]. split. reflexivity. auto.
+          }
+      + rewrite H1. simpl. split. reflexivity .
+        auto.
+  Qed.
   
-  Axiom update_newAddr_2 :
+  Lemma update_newAddr_2 :
     forall h val pred val2 type1,
       newAddr @ type1 @ h == None ->
       newAddr @ type1 @ (h [ val , pred ↦  val2 ]) == None.
+Proof.
+    intros. destruct val, pred . destruct (maybe_case (nth_error h type1)).
+    - rewrite <- H. clear H. simpl in *. rewrite H0. destruct_bool (n =? n1).
+      + destruct_maybe (nth_error h n).
+        * rewrite H0. reflexivity.
+        * destruct x.  simpl. destruct (Nat.eq_dec n type1).
+          {
+            rewrite e in *. simpl. repeat (rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]). rewrite H0 in H2. 
+            inversion H2.
+          }
+          {
+            rewrite list_nth_list_update_diff_index;[|auto]. rewrite H0.  reflexivity. 
+          }
+      + rewrite H0.  reflexivity .
+    - simpl in *. destruct H0. rewrite H0 in *.  inversion H. 
+  Qed.
 
-  Axiom delete_newAddr :
+  Lemma delete_newAddr :
     forall h type1 h' addr,
       newAddr @ type1 @ h == Some (h', addr) ->
       delete @ addr @ h' == h.
-  
+  Proof.
+    intros. destruct addr . destruct (maybe_case (nth_error h type1)).
+    - simpl in *. rewrite H0 in *.  inversion H. 
+    - destruct H0. simpl (newAddr @ _ @ _) in H. simpl in H0. rewrite H0 in H. simpl in H. destruct x.  destruct H as [? [? ?]]. simpl in H. rewrite <- H. clear H. simpl in H2. rewrite H2 in *.  rewrite H1 in *. clear type1 H1. simpl. repeat (rewrite list_nth_list_update with (a':=matrixpCons sqlVal l0);[|auto]). simpl. repeat rewrite list_update_list_update. simpl.
+      rewrite lista_update_lista_update. rewrite list_update_list_nth.  reflexivity. rewrite H0. simpl. rewrite <- H2.  rewrite lista_update_lista_finda. reflexivity. 
+  Qed.
 
 
+
+    Arguments _lookupByObject pred1 val1 h /.
+    Arguments _lookupByPred pred1 h /.
+    Arguments _readMatrixCol {A AS AP} n mat /.
+    Arguments _readWholeCol {A AS AP} n l /.
+    Arguments _filterSomeVal val1 /.
+    Arguments _filterVal val1 val2 /.
+
+    Arguments _readCol  {A AS AP} n l / .
+    
+    Arguments SQLAddrType.addr /.
+    Arguments SQLAddrType.addrS /.
+    Arguments sqlAddr /.
+    Arguments sqlAddrS /.
+    Arguments SQLValType.val /.
+    Arguments SQLValType.valS /.
+    Arguments SQLTypeType.type /.
+    Arguments SQLTypeType.typeS /.
   Section AndMonoid.
-  
+
+    
     Existing Instance and_Monoid.
 
-    Axiom read_lookupByObject :
+    
+
+    Lemma lookupByObject_table_0 : forall n val a b,
+      lookupByObject @ (0, n) @ val @ (a :: b) = mapS @ (getAddr @ 0) @ (lista_filter_indexS @ (filterSomeVal @ val) @ (tableColGetter @ n @ a)).
+    Proof.
+      intros. reflexivity.
+    Qed.
+
+    
+    Lemma lookupByObject_table_S : forall m n val a b,
+      lookupByObject @ (S m, n) @ val @ (a :: b) = mapS @ (getAddr @ S m  ∘ addrToRowS) @ (lookupByObject @ (m, n) @ val @ b).
+    Proof.
+      intros. simpl. destruct_maybe (nth_error b m).
+      auto.
+      rewrite map_map. reflexivity. 
+    Qed.
+    
+    Lemma read_table_diff_table : forall t1 t2 ci ri a,
+      t1 <> t2 -> read @ (t1, ri) @ (t2, ci) @ a = None.
+    Proof.
+      intros. simpl. destruct_bool (t1 =? t2).
+      destruct H. apply Nat.eqb_eq.  auto.
+      reflexivity.
+    Qed.
+    
+    Lemma read_table_0 : forall ci a b,
+      cycle3S @ read @ (0, ci) @ (a :: b) ∘ getAddr @ 0 == cycle3S @ tableCellGetter @ ci @ a.
+    Proof.
+      intros. simpl_equiv. rewrite normalize_cycle3S. normalizecomp. rewrite normalize_cycle3S. reflexivity.
+    Qed.
+    Lemma read_table_S : forall n ci a b,
+      cycle3S @ read @ (S n, ci) @ (a :: b) ∘ getAddr @ (S n) == cycle3S @ read @ (n, ci) @ b ∘ getAddr @ n.
+    Proof.
+      intros. simpl_equiv. normalizecomp. repeat rewrite normalize_cycle3S. reflexivity.  
+    Qed.
+    
+
+
+    Lemma tableCellGetter_comp : forall ci a,
+                                             cycle3S @ tableCellGetter @ ci @ a == flipS @ lista_nthS @ (tableColGetter @ ci @ a).
+    Proof.
+      intros. destruct a. destruct l0. simpl_equiv. apply nat_list_ind_2 with (l1:=a) (l2:=l0).
+      - simpl. auto.
+      - intros. simpl. reflexivity.
+      - intros. simpl. reflexivity.
+      - auto.
+    Qed.
+
+    Lemma addrToRowS_getAddr : forall n, addrToRowS ∘ getAddr @ n == idS.
+    Proof.
+      intros. simpl. arrequiv.
+    Qed.
+    Lemma read_lookupByObject :
       forall pred val h,
         fold @ ((equivS @  Some val) ∘ (cycle3S @ read @ pred @ h )  <$> lookupByObject @ pred @ val @ h) == True.
+    Proof.
+      intros. destruct pred. apply nat_list_ind_2 with (l1:=n) (l2:=h).
+      - simpl. reflexivity.
+      - intros. rewrite lookupByObject_table_0.  simpl fmap. setoid_rewrite (mapS_mapS).  rewrite comp_associativity. rewrite read_table_0.  rewrite tableCellGetter_comp. apply filterTrue.  intros. simpl in H0. simpl. destruct b0. destruct (SQLValType.equiv_dec val s). auto. inversion H0. inversion H0.
+      - intros. simpl. tauto.
+      - intros. rewrite lookupByObject_table_S.  simpl fmap. setoid_rewrite (mapS_mapS).  rewrite <- comp_associativity.  setoid_rewrite comp_associativity at 2.  rewrite read_table_S.
+        rewrite <- H. clear H. evalproper. destruct b, d. 
+        + reflexivity. 
+        + intros. rewrite lookupByObject_table_0.  rewrite read_table_0. simpl fmap. setoid_rewrite  mapS_mapS. rewrite (comp_associativity (getAddr @ 0) (cycle3S @ read @ (0, n0) @ (t0 :: d)) (equivS @ Some val)). rewrite read_table_0. reflexivity .
+        + intros. reflexivity.
+        + intros. rewrite lookupByObject_table_S. rewrite read_table_S. simpl fmap. setoid_rewrite mapS_mapS. rewrite (comp_associativity (getAddr @ S b ∘ addrToRowS) (cycle3S @ read @ (S b, n0) @ (t0 :: d)) (equivS @ Some val)). rewrite <- (comp_associativity addrToRowS (getAddr @ S b) (cycle3S @ read @ (S b, n0) @ (t0 :: d))). rewrite read_table_S. rewrite (comp_associativity (getAddr @ S b ∘ addrToRowS) addrToRowS (equivS @ Some val ∘ (cycle3S @ read @ (b, n0) @ d ∘ getAddr @ b))). rewrite <- (comp_associativity addrToRowS (getAddr @ S b) addrToRowS). rewrite addrToRowS_getAddr. rewrite comp_left_unit. reflexivity.
+    Qed.
+    
+    Lemma lookupByPred_table_0 : forall n a b,
+      lookupByPred @ (0, n) @ (a :: b) = mapS @ (getAddr @ 0 *** idS) @ (lista_filter_indexS' @ (tableColGetter @ n @ a)).
+    Proof.
+      intros. reflexivity.
+    Qed.
 
-    Axiom read_lookupByPred :
+    Arguments _lookupByPred pred1 h /. 
+    Lemma lookupByPred_table_S : forall m n a b,
+      lookupByPred @ (S m, n) @ (a :: b) = mapS @ ((getAddr @ S m  ∘ addrToRowS) *** idS) @ (lookupByPred @ (m, n) @ b).
+    Proof.
+      intros. simpl. destruct_maybe (nth_error b m).
+      auto.
+      rewrite map_map. destruct x. auto. generalize (@lista_filter_index' sqlVal sqlValS
+        (@lista_map (option (lista sqlVal))
+           (@optionS (lista sqlVal) (@listaS sqlVal sqlValS sqlVal_Pointed))
+           (maybe_Pointed (lista sqlVal)) (option sqlVal)
+           (@optionS sqlVal sqlValS) (maybe_Pointed sqlVal)
+           (@injF (option (lista sqlVal)) (option sqlVal)
+              (@optionS (lista sqlVal)
+                 (@listaS sqlVal sqlValS sqlVal_Pointed))
+              (@optionS sqlVal sqlValS)
+              (@_readCol sqlVal sqlValS sqlVal_Pointed n)
+              (proper_xx nat (option (lista sqlVal)) 
+                 (option sqlVal) natS
+                 (@optionS (lista sqlVal)
+                    (@listaS sqlVal sqlValS sqlVal_Pointed))
+                 (@optionS sqlVal sqlValS)
+                 (@_readCol sqlVal sqlValS sqlVal_Pointed) n
+                 (@_readCol_Proper sqlVal sqlValS sqlVal_Pointed)))
+           (@readCol_PointedFunction sqlVal sqlValS sqlVal_Pointed n) l0)).  intros. induction l1.
+      - reflexivity.
+      - rewrite map_cons. rewrite map_cons. f_equal.
+        + destruct a0. reflexivity.
+        + apply IHl1.
+    Qed.
+
+    Lemma read_lookupByPred :
       forall pred h,
-             fold @ (uncurryS @ equivS ∘ (cycle3S @ read @ pred @ h *** SomeS ) <$> lookupByPred @ pred @ h) == True.
+        fold @ (uncurryS @ equivS ∘ (cycle3S @ read @ pred @ h *** SomeS ) <$> lookupByPred @ pred @ h) == True.
+    Proof.
+      intros. destruct pred.  apply nat_list_ind_2 with (l1:=n) (l2:=h).
+      - simpl. reflexivity.
+      - intros. rewrite lookupByPred_table_0. simpl fmap. setoid_rewrite (mapS_mapS).  rewrite comp_associativity. rewrite pairing_comp.  rewrite read_table_0.  rewrite tableCellGetter_comp. rewrite comp_right_unit. apply filterTrue'.  
+      - intros. simpl. tauto.
+      - intros. rewrite lookupByPred_table_S.  simpl fmap. setoid_rewrite (mapS_mapS). setoid_rewrite comp_associativity.  rewrite pairing_comp. rewrite <- comp_associativity.    rewrite read_table_S.
+ rewrite comp_right_unit. rewrite <- H. clear H. evalproper. destruct b, d. 
+        + reflexivity. 
+        + intros. rewrite lookupByPred_table_0.  rewrite read_table_0. simpl fmap. setoid_rewrite  mapS_mapS. rewrite (comp_associativity (getAddr @ 0 *** idS) (cycle3S @ read @ (0, n0) @ (t0 :: d) *** SomeS) (uncurryS @ equivS)). rewrite pairing_comp.  rewrite read_table_0. rewrite comp_associativity.  rewrite pairing_comp. rewrite comp_associativity.  rewrite addrToRowS_getAddr. rewrite (comp_right_unit (cycle3S @ tableCellGetter @ n0 @ t0)). reflexivity.
+        + intros. reflexivity.
+        + intros. rewrite lookupByPred_table_S. rewrite read_table_S. simpl fmap. setoid_rewrite mapS_mapS. rewrite (comp_associativity (getAddr @ S b ∘ addrToRowS *** idS) (cycle3S @ read @ (S b, n0) @ (t0 :: d) *** SomeS) (uncurryS @ equivS)). rewrite pairing_comp. rewrite <- (comp_associativity addrToRowS (getAddr @ S b) (cycle3S @ read @ (S b, n0) @ (t0 :: d))). rewrite read_table_S. rewrite   (comp_associativity).  rewrite pairing_comp. rewrite (comp_associativity (getAddr @ S b ∘ addrToRowS) addrToRowS ((cycle3S @ read @ (b, n0) @ d ∘ getAddr @ b))). rewrite <- (comp_associativity addrToRowS (getAddr @ S b) addrToRowS). rewrite addrToRowS_getAddr. rewrite comp_left_unit. reflexivity.
+    Qed.
+        
 
   End AndMonoid.
 
@@ -905,15 +1438,94 @@ Module SQLHeap <: Heap SQLTypeType SQLAddrType SQLPredType SQLValType.
     
     Existing Instance or_Monoid.
 
-    Axiom lookupByObject_read :
+    Lemma eqb_x_x : forall x, x =? x = true.
+    Proof.
+      intros. pose (Nat.eqb_eq x x). apply i. reflexivity.
+    Qed.
+
+    Lemma nth_map : forall A B (f  : A -> B) (a : A) n (l : list A),
+                      nth n (map f l) (f a) = f (nth n l a).
+    Proof.
+      intros. apply nat_list_ind_2 with (l1:=n) (l2:=l0).
+      reflexivity.
+      intros. simpl. reflexivity.
+      intros. simpl. reflexivity.
+      intros. simpl. auto.
+    Qed.
+    
+    Lemma lookupByObject_read :
       forall addr pred val h,
         h [addr, pred] == Some val ->
         fold @ (equivS @ addr <$> lookupByObject @ pred @ val @ h) == True.
-
-    Axiom lookupByPred_read :
+    Proof.
+      intros. destruct addr, pred.  simpl in *. destruct (Nat.eq_dec n n1).
+      - rewrite e in *. clear n e. rewrite eqb_x_x in H. destruct_maybe (nth_error h n1).
+        + inversion H.
+        + destruct x. simpl in *. rewrite map_map. refine (filterTrue_one _ _ _ (injF (fun x : nat => n1 = n1 /\ n0 = x) _) (injF
+              (caseMaybe
+                 (injF (_filterVal val)
+                    (proper_xx sqlVal sqlVal bool sqlValS sqlValS boolS
+                       _filterVal val _filterVal_Proper)) false)
+              (proper_xx bool (option sqlVal) bool boolS 
+                 (optionS sqlValS) boolS
+                 (caseMaybe
+                    (injF (_filterVal val)
+                       (proper_xx sqlVal sqlVal bool sqlValS sqlValS boolS
+                          _filterVal val _filterVal_Proper))) false
+                 (injF3_1 caseMaybe
+                    (caseMaybe_Proper sqlVal bool sqlValS boolS)
+                    (injF (_filterVal val)
+                       (proper_xx sqlVal sqlVal bool sqlValS sqlValS boolS
+                          _filterVal val _filterVal_Proper))))) (lista_map
+              (injF (_readCol n2)
+                 (proper_xx nat (option (lista sqlVal)) 
+                    (option sqlVal) natS (optionS (listaS sqlValS))
+                    (optionS sqlValS) _readCol n2
+                    (_readCol_Proper sqlVal_Pointed)))
+              (readCol_PointedFunction n2) l0) _ _).
+          * simpl. reflexivity. 
+          * simpl. exists n0. split ; [| auto]. destruct l0. simpl in *. rewrite (nth_map _ _ (fun a : option (lista sqlVal) =>
+           match a with
+           | Some l' => Some (lista_nth n2 l')
+           | None => None
+           end) None). destruct_maybe ( match nth n0 l0 None with
+     | Some l' => Some (lista_nth n2 l')
+     | None => None
+                                        end). inversion H. inversion H. destruct (SQLValType.equiv_dec val val). reflexivity. destruct n. reflexivity.
+      - simpl in H. destruct_bool (n =? n1).
+        + destruct n3. apply Nat.eqb_eq. auto.
+        + inversion H.
+    Qed.
+    
+    Lemma lookupByPred_read :
       forall addr pred val h,
         h [addr, pred] == Some val ->
         fold @ (equivS @ (addr, val)  <$> lookupByPred @ pred @ h) == True.
+    Proof.
+      intros. destruct addr, pred.  simpl in *. destruct (Nat.eq_dec n n1).
+      - rewrite e in *. clear n e. rewrite eqb_x_x in H. destruct_maybe (nth_error h n1).
+        + inversion H.
+        + destruct x. simpl in *. rewrite map_map. refine (filterTrue_one' _ _ (injF (fun x : nat * sqlVal =>
+         let (c, d) := let (a, c) := x in (n1, a, c) in
+         (let (c0, d0) := c in n1 = c0 /\ n0 = d0) /\ val = d) _) (lista_map
+              (injF (_readCol n2)
+                 (proper_xx nat (option (lista sqlVal)) 
+                    (option sqlVal) natS (optionS (listaS sqlValS))
+                    (optionS sqlValS) _readCol n2
+                    (_readCol_Proper sqlVal_Pointed)))
+              (readCol_PointedFunction n2) l0) _).
+          * simpl. exists n0. exists val. split ; [| auto]. destruct l0. simpl in *. rewrite (nth_map _ _ (fun a : option (lista sqlVal) =>
+           match a with
+           | Some l' => Some (lista_nth n2 l')
+           | None => None
+           end) None). auto. 
+      - simpl in H. destruct_bool (n =? n1).
+        + destruct n3. apply Nat.eqb_eq. auto.
+        + inversion H.
+    Unshelve.
+    autounfold. intros. destruct x, y. destruct H0. simpl in H0, H2. rewrite H0, H2. reflexivity. 
+    Qed.
+    
     
   End OrMonoid.
   

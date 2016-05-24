@@ -155,3 +155,13 @@ Defined.
   Notation "a &&& b" := (pairingF @ a @ b) (at level 40, left associativity).
 
     Definition pairS {A B} {AS : Setoid A} {BS : Setoid B} : AS ~>  BS ~~> AS ~*~ BS := curryS @ idS.
+
+
+    Lemma pairing_comp :
+      forall {A} {AS : Setoid A} {B} {BS : Setoid B} {C} {CS : Setoid C}
+             {D} {DS : Setoid D} {E} {ES : Setoid E} {F} {FS : Setoid F}
+             (f : AS ~> CS) (g : BS ~> DS) (h : CS ~> ES) (i : DS ~> FS),
+        (h *** i) ∘ (f *** g) == (h ∘ f) *** (i ∘ g).
+    Proof.
+      intros. simpl_equiv. destruct a. reflexivity. 
+    Qed.

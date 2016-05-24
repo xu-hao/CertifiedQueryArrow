@@ -1,4 +1,4 @@
-Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed Lista Matrixp.
+Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed Lista Matrixp GenUtils.
 Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics Coq.Arith.Compare_dec.
 
 Existing Instance maybe_Monad.
@@ -51,9 +51,7 @@ Instance maybe_Applicative : @Applicative maybe (@maybeS) _ := monad_Applicative
  *)
 
 
-Existing Instance list_A_Monoid.
-
-Definition _maybe_mappend {C} {CS : Setoid C} {mon : @Monoid C CS} (a b : maybe C) : maybe C :=
+(* Definition _maybe_mappend {C} {CS : Setoid C} {mon : @Monoid C CS} (a b : maybe C) : maybe C :=
   match a with
     | None => b
     | Some a' => match b with
@@ -76,18 +74,19 @@ Proof.
   intros. simpl. destruct a. reflexivity. auto.
   intros. simpl. destruct a. simpl. reflexivity. simpl. auto.
   intros. simpl. destruct a. simpl. destruct b. simpl. destruct c. rewrite associativity_monoid. reflexivity. reflexivity. destruct c. simpl. reflexivity. simpl. reflexivity. destruct b. simpl. destruct c. reflexivity. reflexivity. destruct c. simpl. reflexivity. simpl. auto.
-Defined.
+Defined. *)
+
 
 
 Definition unionRows : listaS (maybeS rowS) ~> listaS (maybeS rowS) ~~> listaS (maybeS rowS) :=
-  lista_zipWithS @ mappend.
+  lista_zipWithS maybe_first_mappend.
 
 Definition minS := injF2 min _.
 
 Existing Instance sqlVal_Pointed.
 
 Definition _unionTables (tab1 tab2 : matrixp sqlVal) : matrixp sqlVal :=
-  matrixpConsS @ (minS @ (tableWidthGetter @ tab1) @ (tableWidthGetter @ tab2)) @ (unionRows @ (tableRowsGetter @ tab1) @ (tableRowsGetter @ tab2)).
+  matrixpConsS @ (unionRows @ (tableRowsGetter @ tab1) @ (tableRowsGetter @ tab2)).
 
 Instance _unionTables_Proper : Proper (equiv ==> equiv ==> equiv) _unionTables.
 Proof.
@@ -99,65 +98,12 @@ Definition unionTables := injF2 _unionTables _.
 Definition unionDatabases : databaseS ~> databaseS ~~> databaseS :=
   list_zipWithS' @ unionTables.
 
-Fixpoint list_maybe_filter {A : Type} {AS : Setoid A} (p : AS ~> boolS) (l : list (maybe A)) : list A :=
-    match l with
-      | nil => nil
-      | None :: l' => list_maybe_filter p l'
-      | Some a :: l' => if p @ a then a :: list_maybe_filter p l' else list_maybe_filter p l'
-    end.
 
-Instance list_maybe_filter_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv) (@list_maybe_filter A AS).
-  Proof.
-    autounfold. intros. generalize H0. clear H0. apply list_ind_2 with (l1:=x0) (l2:=y0).
-    intros. reflexivity.
-    intros. inversion H1.
-    intros. inversion H1.
-    intros. inversion H1. simpl. matchequiv. simpl in H8. rewrites. destruct (y @ a0). constructor. auto. apply H0.  auto. apply H0. auto. apply H0. auto.
-  Qed.
-  
-Fixpoint list_maybe_filter_index {A : Type} {AS : Setoid A} n (p : AS ~> boolS) (l : list (maybe A)) : list nat :=
-    match l with
-      | nil => nil
-      | None :: l' => list_maybe_filter_index (S n) p l'
-      | Some a :: l' => if p @ a then n :: list_maybe_filter_index (S n) p l' else list_maybe_filter_index (S n) p l'
-    end.
-
-Instance list_maybe_filter_index_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv ==> equiv) (@list_maybe_filter_index A AS).
-Proof.
-    autounfold. intros. generalize H1 x y H . clear H x y H1. apply list_ind_2 with (l1:=x1) (l2:=y1).
-    intros. reflexivity.
-    intros. inversion H1.
-    intros. inversion H1.
-    intros. inversion H1. simpl. matchequiv. simpl in H9. rewrite H0, H9. destruct (y0 @ a0). constructor. auto. apply H.  auto. rewritesr. apply H. auto. rewritesr. apply H. auto. rewritesr.
-Qed.
-
-Fixpoint list_maybe_filter_index' {A : Type} {AS : Setoid A} n (p : AS ~> boolS) (l : list (maybe A)) : list (nat * A) :=
-    match l with
-      | nil => nil
-      | None :: l' => list_maybe_filter_index' (S n) p l'
-      | Some a :: l' => if p @ a then (n,a) :: list_maybe_filter_index' (S n) p l' else list_maybe_filter_index' (S n) p l'
-    end.
-
-Instance list_maybe_filter_index'_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv ==> equiv) (@list_maybe_filter_index' A AS).
-Proof.
-    autounfold. intros. generalize H1 x y H . clear H x y H1. apply list_ind_2 with (l1:=x1) (l2:=y1).
-    intros. reflexivity.
-    intros. inversion H1.
-    intros. inversion H1.
-    intros. inversion H1. simpl. matchequiv. simpl in H9. rewrite H0, H9. destruct (y0 @ a0). constructor. auto. apply H.  auto. rewritesr. apply H. auto. rewritesr. apply H. auto. rewritesr.
-Qed.
-
-Fixpoint duplicate {A} (n : nat) (a : A) : list A :=
-  match n with
-    | 0 => nil
-    | S n => a :: duplicate n a
-  end.
 
 Definition caseSqlVal {A} {AS : Setoid A} (nat1 : natS ~> AS) (addr1 : natS ~*~ natS ~> AS) (row1 : listS sqlValS ~> AS) val1 : A :=
   match val1 with
     | vNat n => nat1 @ n
     | vAddr a => addr1 @ a
-    | vRow l => row1 @ l
   end
 .
 
@@ -166,7 +112,6 @@ Proof.
   autounfold. intros. unfold caseSqlVal. simpl in H2. rewrite H2. destruct y2. 
   rewritesr.
   rewritesr. 
-  rewritesr.
 Qed.
 
 Definition caseSqlValS {A AS} := injF4 (@caseSqlVal A AS) _.
@@ -197,85 +142,15 @@ Qed.
 
 Definition vAddrS : sqlAddrS ~> sqlValS := injF vAddr _.
 
-Existing Instance pair_Proper.
-
-Existing Instance listaCons_Proper.
-
-Lemma lista_equiv_dec : forall {A} {AS :Setoid A} (r1 r2 : lista A) (equiv_dec : forall a1 a2 : A, {a1 == a2} + {~a1 == a2}),  {r1 == r2} + {~r1 == r2}.
-Proof.
-  intros. destruct r1 as [s l], r2 as [s0 l0].
-  destruct (equiv_dec s s0).
-  
-  - apply list_rect_2 with (l1:=l) (l2:=l0).
-      * left. rewrite e. reflexivity.
-      * intros. destruct H.
-        destruct e0. destruct (equiv_dec a s).
-        left. rewrite <- e, e0. simpl. split; [reflexivity | split; [reflexivity | auto]].
-        right. simpl. tauto.
-        right. simpl in *. tauto.
-      * intros. destruct H.
-        destruct (equiv_dec a s0).
-        left. rewrite e, e1. rewrite e in e0. simpl. split; [reflexivity | auto].
-        right. simpl. tauto.
-        right. simpl in *. tauto.
-      * intros. destruct H.
-        destruct (equiv_dec a c).
-        simpl in e, e1.
-        left. rewrite <- e, e1. rewrite <- e in e0.  simpl in *. split; [reflexivity | auto].
-        right. simpl. tauto.
-        right. simpl in *. tauto.
-  - right. intro. apply n. apply listaCons_equiv with (l1:=l)(l2:=l0). auto.
-Qed.
-
-Lemma maybe_equiv_dec : forall {A} {AS :Setoid A} (r1 r2 : maybe A) (equiv_dec : forall a1 a2 : A, {a1 == a2} + {~a1 == a2}), {r1 == r2} + {~r1 == r2}.
-Proof.
-  intros.  destruct r1 as [n|], r2 as [n0 |].
-  - destruct (equiv_dec n n0).
-    + left. auto.
-    + right. auto. 
-  - right. intro. inversion H.
-  - right. intro. inversion H.
-  - left. reflexivity.
-Qed.
 
 Lemma row_equiv_dec : forall (r1 r2 : row) ,  {r1 == r2} + {~r1 == r2}.
 Proof.
   intros. apply lista_equiv_dec.  apply SQLValType.equiv_dec.
-Qed.
+Defined.
 
 Lemma maybe_row_equiv_dec : forall r1 r2 : maybe row, {r1 == r2} + {~r1 == r2}.
 Proof.
   intros. apply maybe_equiv_dec. apply row_equiv_dec. 
-Qed.
+Defined.
 
-Lemma nat_int : forall n n' , n < S n' -> ~ n' < n.
-Proof.
-  double induction n n'.
-  intros. intro. inversion H0.
-  intros. intro. inversion H0. inversion H1.
-  intros. intro. inversion H0. inversion H3.
-  intros. intro. apply H0 with (n':=n0). apply le_S_n. auto. apply le_S_n. auto.
-Qed.
-
-Open Scope nat_scope.
-Lemma plus_symmetry : forall a b, a+b = b+a.
-Proof.
-  induction a. intros. simpl. apply plus_n_O.
-  intros. simpl. rewrite <- plus_n_Sm. f_equal. apply IHa.
-Qed.
-
-Definition ltS : natS ~> natS ~~> iff_setoid := injF2 lt _.
-
-  Definition ltMaybe a b :=
-    caseMaybeS
-      @ (ltS @ a) 
-      @ False
-      @ b.
-
-  Instance ltMaybe_Proper : Proper (equiv ==> equiv ==> equiv) ltMaybe.
-  Proof.
-    solve_properS ltMaybe.
-  Qed.
-  
-  Definition ltMaybeS := injF2 ltMaybe _.
   

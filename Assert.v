@@ -37,8 +37,8 @@ End Assert.
   Notation "'aexists' v , a" := (aExists v a) (at level 85).
   
   Module AssertModel (TT: TypeType ) (AT : AddrType ) (PT : PredType) (VT : ValType)
-         (B: BuiltInExpr VT) (S : Store VT) (H : Heap TT AT PT VT).
-  Module EM := ExprModel VT B S.
+          (S : Store VT) (H : Heap TT AT PT VT) (B: BuiltInExpr TT AT PT VT S H) .
+  Module EM := ExprModel TT AT PT VT S H B.
   Module HU := HeapUtils TT AT PT VT H.
   Import TT AT PT VT EM S H HU.
   Definition assertion := @assertion pred val B.builtInExpr.
@@ -49,9 +49,9 @@ End Assert.
       | emp => ~exists a, inDom @ a @ h
       | [[ expr , pred ]] ⟼ expr2 =>
         exists val val2 addr1,
-        ⟦ expr ⟧expr s == Some val /\
+        ⟦ expr ⟧expr s h == Some val /\
         extractAddr @ val == Some addr1 /\                             
-        ⟦ expr2 ⟧expr s == Some val2 /\
+        ⟦ expr2 ⟧expr s h == Some val2 /\
         singleton @ addr1 @ pred @ val2 @ h
       | a0 ∗ a1 => exists h0 h1,
                      h0 ⊥ h1 /\ h0 ⋅ h1 == h /\ _models a0 s h0  /\ _models a1 s h1
@@ -69,8 +69,8 @@ End Assert.
     Proof.
       autounfold. intros x y H. rewrite H. clear x H. induction y.
       intros. simpl.  split.
-      intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. transitivity v0. auto. auto. auto.
-      intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. transitivity v. symmetry. auto. auto. auto.
+      intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. unfold maybe_equiv in *. transitivity v0. auto. auto. auto.
+      intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. unfold maybe_equiv in *. transitivity v. symmetry. auto. auto. auto.
       intros. unfold _models. split.
       intro. destruct H1 as [x1 [x2 [x3 ? ] ] ]. exists x1. exists x2. exists x3. rewrite <- H. rewrite <- H0. tauto. 
       intro. destruct H1 as [x1 [x2 [x3 ? ] ] ]. exists x1. exists x2. exists x3. rewrite H. rewrite H0. tauto. 

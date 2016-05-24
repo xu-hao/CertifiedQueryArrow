@@ -72,4 +72,20 @@ Ltac matchequiv := match goal with
                         | |- _ (match ?a with _ => _ end) ( match ?b with _ => _ end) => equiv a b
                       end.
 
-Ltac solve_properS a := autounfold; intros; unfold a; rewritesr. 
+Ltac solve_properS a := autounfold; intros; unfold a; rewritesr.
+
+  Lemma bool_case : forall b, b=true \/ b=false.
+  Proof.
+    destruct b.
+    left; auto.
+    right; auto.
+  Qed.
+
+
+  Ltac destruct_bool a :=
+    let H1 := fresh "H" in
+    let H2 := fresh "H" in
+    let x := fresh "x" in
+    destruct (bool_case a) as [H1 | H2] ; [
+        simpl in *; rewrite H1 in *; simpl in * |
+         simpl in *; rewrite H2 in *; simpl in * ].

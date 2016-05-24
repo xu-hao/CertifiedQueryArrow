@@ -73,3 +73,24 @@ Section NatMonoid.
   Defined.
 
 End NatMonoid.
+
+
+Section Aux.
+
+    Definition andS := injF2 and _.
+    Instance and_Monoid : @Monoid Prop iff_setoid.
+    Proof.
+      exists True andS.
+      intros. simpl. tauto.
+      intros. simpl. tauto.
+      intros. simpl. tauto.
+    Defined.
+    Definition orS := injF2 or _.
+    Instance or_Monoid : @Monoid Prop iff_setoid.
+    Proof.
+      exists False orS.
+      intros. simpl. tauto.
+      intros. simpl. tauto.
+      intros. simpl. tauto.
+    Defined.
+End Aux.

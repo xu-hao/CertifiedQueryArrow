@@ -1,38 +1,9 @@
 Require Import FSetInterface.
-Require Import Tactics Utils Algebra.SetoidUtils Algebra.SetoidCat  Algebra.Monad Algebra.PairUtils Algebra.Maybe Algebra.Alternative Algebra.Functor Algebra.FoldableFunctor Algebra.Applicative Algebra.Monoid.
+Require Import Tactics Utils Algebra.SetoidUtils Algebra.SetoidCat  Algebra.Monad Algebra.PairUtils Algebra.Maybe Algebra.Alternative Algebra.Functor Algebra.FoldableFunctor Algebra.Applicative Algebra.Monoid Algebra.MonoidUtils.
 
 Require Import FMapWeakList  RelationClasses Relation_Definitions Morphisms SetoidClass.
 
 Require Import Coq.Structures.DecidableTypeEx.
-
-Definition cycle24S {A B C D E} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} {ES : Setoid E} : (AS ~~> BS ~~> CS ~~> DS ~~> ES)  ~> (AS ~~> CS ~~> DS ~~> BS ~~> ES) :=
-  flipS @ compS @ (flipS @ compS @ flipS ∘ flipS).
-
-Lemma normalize_cycle24S : forall {A B C D E} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} {ES : Setoid E}  (f: AS ~> BS ~~> CS ~~> DS ~~> ES) (a : A) (b : B) (c : C) (d : D),
-                             cycle24S @ f @ a @ c @ d @ b = f @ a @ b @ c @ d.
-Proof.
-  intros. auto.
-Qed.
-
-Opaque cycle24S.
-
-Definition cycle3S {A B C D} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D} : (AS ~~> BS ~~> CS ~~> DS)  ~> (BS ~~> CS ~~> AS ~~> DS) :=
-  flipS @ compS @ flipS ∘ flipS.
-
-Lemma normalize_cycle3S : forall {A B C D} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {DS : Setoid D}  (f: AS ~> BS ~~> CS ~~> DS) (a : A) (b : B) (c : C),
-                             cycle3S @ f @ b @ c @ a = f @ a @ b @ c.
-Proof.
-  intros. auto.
-Qed.
-
-Opaque cycle3S.
-
-Instance equiv_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv ) equiv.
-Proof.
-  solve_proper.      
-Qed.
-    
-Definition equivS {A AS} := injF2 (@equiv A AS) _.
 
 Module FVarSet := FSetNat.
 
@@ -81,25 +52,7 @@ Module Type ValType.
   Axiom equiv_dec : forall val1 val2, {val1 == val2} + {~ val1 == val2}.
 End ValType.
 
-Section Aux.
 
-    Definition andS := injF2 and _.
-    Instance and_Monoid : @Monoid Prop iff_setoid.
-    Proof.
-      exists True andS.
-      intros. simpl. tauto.
-      intros. simpl. tauto.
-      intros. simpl. tauto.
-    Defined.
-    Definition orS := injF2 or _.
-    Instance or_Monoid : @Monoid Prop iff_setoid.
-    Proof.
-      exists False orS.
-      intros. simpl. tauto.
-      intros. simpl. tauto.
-      intros. simpl. tauto.
-    Defined.
-End Aux.
 Module Type Store (VT : ValType).
   Import VT.
   Parameter t : Type.
@@ -294,7 +247,7 @@ Module Type Heap  (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
   Axiom allocated_delete_diff_addr :
     forall h addr1 addr',
       ~ addr1 == addr' ->
-      allocated @ addr' @ (delete @ addr1 @ h) == allocated @ addr1 @ h.
+      allocated @ addr1 @ (delete @ addr' @ h) == allocated @ addr1 @ h.
   
   Axiom read_delete_diff_addr :
     forall h val val' pred,
@@ -303,6 +256,7 @@ Module Type Heap  (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
 
   Axiom readType_delete_diff_addr :
     forall h val val',
+      ~ val == val' ->
       readType @ val' @ (delete @ val @ h) == readType @ val' @ h.
   
   Axiom update_update :
@@ -311,19 +265,22 @@ Module Type Heap  (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
   
   Axiom update_update_diff_addr :
     forall h val val' pred val2 val3,
-      h [ val , pred ↦  val2 ] [ val' , pred ↦ val3 ] == h [ val' , pred ↦ val3 ] [ val , pred ↦ val3 ].
+      ~ val == val' ->
+      h [ val , pred ↦  val2 ] [ val' , pred ↦ val3 ] == h [ val' , pred ↦ val3 ] [ val , pred ↦ val2 ].
   
   Axiom update_update_diff_pred :
     forall h val pred pred' val2 val3,
-      h [ val , pred ↦  val2 ] [ val , pred' ↦ val3 ] == h [ val , pred' ↦ val3 ] [ val , pred ↦ val3 ].
+      ~ pred == pred' ->
+      h [ val , pred ↦  val2 ] [ val , pred' ↦ val3 ] == h [ val , pred' ↦ val3 ] [ val , pred ↦ val2 ].
 
   Axiom delete_update :
     forall h val pred val2,
       delete @ val @ (h [ val , pred ↦  val2 ]) == delete @ val @ h.
 
   Axiom delete_update_diff_addr :
-    forall h val val' pred val2 val3,
-      delete @ val' @ (h [ val , pred ↦  val2 ]) == (delete @ val' @ h) [ val , pred ↦ val3 ].
+    forall h val val' pred val2,
+      ~ val == val' ->
+      delete @ val' @ (h [ val , pred ↦  val2 ]) == (delete @ val' @ h) [ val , pred ↦ val2 ].
   
   Axiom delete_delete :
     forall h val val',
@@ -332,6 +289,7 @@ Module Type Heap  (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
   Axiom update_newAddr_1 :
     forall h val pred val2 type1 h' addr,
       newAddr @ type1 @ h == Some (h', addr) ->
+      val <> addr ->
       newAddr @ type1 @ (h [ val , pred ↦  val2 ]) == Some (h' [ val , pred ↦  val2 ], addr).
   
   Axiom update_newAddr_2 :

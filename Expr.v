@@ -54,79 +54,80 @@ Section Expr.
 End Expr.
 
 
-Module Type BuiltInExpr (VT : ValType).
-  Import VT.
+Module Type BuiltInExpr (TT:TypeType) (AT:AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
+  Import TT AT PT VT.
   Parameter builtInExpr : Type.
   Parameter builtInExprS : Setoid builtInExpr.
-  Parameter appBIE : builtInExprS ~> listS valS ~~> optionS valS.
+  Parameter appBIE : builtInExprS ~> listS valS ~~> H.tS ~~> S.tS ~~> optionS valS.
 End BuiltInExpr.
   
-Module ExprModel (VT : ValType) (B : BuiltInExpr VT) (S : Store VT).
+Module ExprModel (TT:TypeType) (AT:AddrType) (PT : PredType) (VT : ValType)  (S : Store VT) (H : Heap TT AT PT VT) (B : BuiltInExpr TT AT PT VT S H).
   Import VT S B.
   Definition expr := @expr val builtInExpr.
   Instance exprS : Setoid expr := @exprS val builtInExpr.
   Existing Instance maybe_Monad.
   Existing Instance monadFunctor.
   Existing Instance monad_Applicative.
-  Fixpoint _exprEval (s : S.t ) (e : expr) : maybe val :=
+  Fixpoint _exprEval (h : H.t) (s : S.t ) (e : expr) : maybe val :=
     match e with
       | valExpr val => Some val 
       | varExpr var => s [ var ]s
       | appExpr b args =>
         match (
-            fix _exprsEval (s : S.t) (l : list expr) : option (list val) :=
+            fix _exprsEval (h : H.t) (s : S.t) (l : list expr) : option (list val) :=
               match l with
                 | List.nil => ret @ @nil val
-                | e :: es => consS <$> _exprEval s e <*> _exprsEval s es
-              end) s args with
+                | e :: es => consS <$> _exprEval h s e <*> _exprsEval h s es
+              end) h s args with
           | None => None
-          | Some l => appBIE @ b @ l
+          | Some l => appBIE @ b @ l @ h @ s
         end
     end.
   
-  Definition exprEval : S.tS ~> exprS ~~> optionS valS.
+  Definition exprEval : H.tS ~> S.tS ~~> exprS ~~> optionS valS.
     simple refine (
-             injF2 _exprEval _).
-    Lemma exprEval_1 :  Proper (equiv ==> equiv ==> equiv) _exprEval.
+             injF3 _exprEval _).
+    Lemma exprEval_1 :  Proper (equiv ==> equiv ==> equiv ==> equiv) _exprEval.
     Proof.
-      autounfold. intros. simpl in H0. rewrite H0. clear H0 x0. generalize H. clear H. apply expr_ind_2 with (e:= y0) (Q:=fun es => allTrue (fun y0 => x == y -> _exprEval x y0 == _exprEval y y0) es).
+      autounfold. intros. simpl in H1. rewrite H1. clear H1 x1. generalize H H0. clear H H0. apply expr_ind_2 with (e:=y1) (Q:=fun es => allTrue (fun y1 => x == y -> x0 == y0 -> _exprEval x x0 y1 == _exprEval y y0 y1) es).
       intros. simpl. reflexivity.
-      intros. simpl. equiv (x [var ]s) (y [var ]s). auto. 
+      intros. simpl. equiv (x0 [var ]s) (y0 [var ]s). auto. 
       compute. auto.
       intros. unfold allTrue. rewrite map_cons.  rewrite fold_right_cons. split.
       auto.
       auto.
-      intros. unfold _exprEval. fold _exprEval. pose (_es:=(fix _exprsEval (s : t) (l0 : list expr) {struct l0} :
+      intros. unfold _exprEval. fold _exprEval. pose (_es:=(fix _exprsEval h (s : t) (l0 : list expr) {struct l0} :
         option (list val) :=
         match l0 with
         | nil => ret @ @nil val
-        | e :: es => consS <$> _exprEval s e <*> _exprsEval s es
-        end)). fold _es. assert (_es x l == _es y l).  induction l.
+        | e :: es => consS <$> _exprEval h s e <*> _exprsEval h s es
+        end)). fold _es. assert (_es x x0 l == _es y y0 l).  induction l.
       simpl. constructor. 
-      unfold _es. fold _es. destruct H. rewrite (IHl H1). rewrite (H H0). reflexivity.
-equiv (_es x l) (_es y l). simpl in H1. rewrite H1. reflexivity. 
+      unfold _es. fold _es. destruct H. rewrite (IHl H2). rewrite (H H0). reflexivity. auto.
+equiv (_es x x0 l) (_es y y0 l). simpl in H2. rewrite H0, H1, H2. reflexivity. 
     Qed.
     apply exprEval_1.  
   Defined.
   
-  Definition _exprsEval s (es : list expr) : maybe (list val) :=  
-     mapM @ (exprEval @ s) @ es.
+  Definition _exprsEval h s (es : list expr) : maybe (list val) :=  
+     mapM @ (exprEval @ h @ s) @ es.
   
-  Definition exprsEval : tS ~> listS exprS ~~> optionS (listS valS).
-    simple refine (    injF2 _exprsEval _).
-    Lemma exprsEval_1 : Proper (equiv ==> equiv ==> equiv) _exprsEval.
+  Definition exprsEval : H.tS ~> tS ~~> listS exprS ~~> optionS (listS valS).
+    simple refine (    injF3 _exprsEval _).
+    Lemma exprsEval_1 : Proper (equiv ==> equiv ==> equiv ==> equiv) _exprsEval.
     Proof.
-      repeat autounfold. intros. generalize H0. clear H0. apply list_ind_2 with (l1 := x0) (l2 := y0).
+      repeat autounfold. intros. generalize H0 H1. clear H0 H1. apply list_ind_2 with (l1 := x1) (l2 := y1).
       intros. constructor.
-      intros. inversion H1.
-      intros. inversion H1.
-      intros. inversion H1. unfold _exprsEval in *.  rewrite H5. rewrite H7. rewrite H. reflexivity.    Qed.
+      intros. inversion H2.
+      intros. inversion H2.
+      intros. inversion H2. unfold _exprsEval in *.  rewrite H6. rewrite H8. rewrite H. rewrite H1. reflexivity.
+    Qed.
     apply exprsEval_1.
   Defined.
   
-  Notation "⟦ e ⟧expr" := (fun s => exprEval @ s @ e)(at level 20).
-  Notation "⟦ es ⟧exprs" := (fun s => exprsEval @ s @ es) (at level 20).
+  Notation "⟦ e ⟧expr" := (fun s h => exprEval @ h @ s @ e)(at level 20).
+  Notation "⟦ es ⟧exprs" := (fun s h => exprsEval @ h @ s @ es) (at level 20).
 
-  Definition exprEval' := flipS @ exprEval.
+  Definition exprEval' := cycle3S @ (cycle3S @ exprEval).
 
 End ExprModel.

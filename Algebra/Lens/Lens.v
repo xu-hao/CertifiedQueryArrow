@@ -1,4 +1,4 @@
-Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad LensTypes Tactics Utils Monoid MonoidUtils.
+Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad Tactics Utils Monoid MonoidUtils.
 Require Import SetoidClass List.
 
 

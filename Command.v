@@ -1,4 +1,4 @@
-Require Import Assert Utils Algebra.Monad Algebra.SetoidUtils Algebra.ListUtils Algebra.SetoidCat Algebra.StoreHeap Algebra.ContT Algebra.Store Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.MonoidUtils Algebra.FoldableFunctor Algebra.PairUtils Algebra.Functor Algebra.Alternative Algebra.Maybe Algebra.Applicative Algebra.MonoidUtils.
+Require Import Assert Utils Algebra.Monad Algebra.SetoidUtils Algebra.ListUtils Algebra.SetoidCat Algebra.StoreHeap Algebra.ContT Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.MonoidUtils Algebra.FoldableFunctor Algebra.PairUtils Algebra.Functor Algebra.Alternative Algebra.Maybe Algebra.Applicative Algebra.MonoidUtils.
 
 Require Import List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 

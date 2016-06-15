@@ -220,6 +220,13 @@ Fixpoint lista_equiv0 {A} {AS : Setoid A} {AP : Pointed A} (l1 l2 : list A) :=
       a1' == a2' /\ lista_equiv0 l1' l2'
   end
 .
+
+Instance lista_equiv0_Reflexive A AS AP : Reflexive (@lista_equiv0 A AS AP).
+Proof.
+  autounfold. intro. induction x.
+  reflexivity.
+  split. reflexivity. auto.
+Qed.
                                
 Definition lista_equiv {A} {AS : Setoid A} {AP : Pointed A} (l1 l2 : lista A) :=
   match l1, l2 with
@@ -1551,3 +1558,116 @@ End Or_Monoid.
         | a :: l1', b :: l2' => f a b :: list_zipWith_not_proper f l1' l2'
       end
     .    
+
+(*  Fixpoint compact {A} {AS : Setoid A} (l1  : list (maybe A)) :=
+    match l1 with
+      | nil => nil
+      | None :: l2' => compact l2'
+      | Some a :: l2' => Some a :: compact l2'
+    end.*)
+  
+  Fixpoint list_merge {A} {AS : Setoid A} (l1  : list (maybe A)) (l2 : list A) :=
+    match l1, l2 with
+      | nil, _ => map Some l2
+      | None :: l1', nil => list_merge l1' nil
+      | None :: l1', a :: l2' => Some a :: list_merge l1' l2'                   
+      | Some a :: l1', _ => Some a :: list_merge l1' l2
+    end
+  .
+
+(*  Instance list_merge_Proper A AS : Proper (equiv ==> equiv ==> equiv) (@list_merge A AS).
+  Proof.
+    autounfold. intros. generalize H x0 y0 H0. clear H x0 y0 H0. apply list_ind_2 with (l1:=x) (l2:=y).
+    intros. unfold list_merge.  apply map_Proper. auto. auto.
+    intros. inversion H0. 
+    intros. inversion H0. 
+    intros. inversion H0. unfold list_merge. fold list_merge.      matchequiv. constructor. auto. apply H. auto. auto. matchequiv. auto. inversion H9. constructor. auto. apply H. auto. auto.
+  Qed.
+  *)
+
+  Definition lista_merge {A} {AS : Setoid A} (l1 : lista (maybe A)) (l2 : list A) :=
+    match l1 with
+      | listaCons _ l1 => listaCons _ (list_merge l1 l2)
+    end
+  .
+
+  
+  Instance lista_merge_Proper A AS : Proper (equiv ==> equiv ==> equiv) (@lista_merge A AS).
+  Proof.
+    autounfold. intros. destruct x,y. unfold lista_merge. simpl in H. generalize H x0 y0 H0. clear H x0 y0 H0. apply list_ind_2 with (l1:=l) (l2:=l0).
+    -    intros. unfold list_merge.  rewritesr. 
+    - intros.  destruct a.
+      + inversion H0. inversion H2.
+      + rewrite H with (y0:=y0).
+        * simpl. clear H H1. generalize b H0. clear b H0. induction y0.
+          {
+            reflexivity.
+          }
+          {
+            intros. destruct b. reflexivity. destruct m.
+            inversion H0. inversion H1. inversion H2.
+            simpl. split. reflexivity. apply IHy0. simpl in H0. simpl. tauto.
+          }
+        * simpl in H0. tauto.
+        * auto.
+    - intros.  destruct a.
+      + inversion H0. inversion H2.
+      + rewrite <- H with (x0:=x0).
+        * simpl. clear H H1. generalize b H0. clear b H0. induction x0.
+          {
+            reflexivity.
+          }
+          {
+            intros. destruct b. reflexivity. destruct m.
+            inversion H0. inversion H1. inversion H2.
+            simpl. split. reflexivity. apply IHx0. simpl in H0. simpl. tauto.
+          }
+        * simpl in H0. tauto.
+        * auto.
+    - intros. inversion H0. simpl. destruct a, c.
+      + split. auto. apply H. auto. auto.
+      + inversion H2. 
+      + inversion H2. 
+      + inversion H2. destruct x0, y0.
+        * apply H. auto. auto.
+        * inversion H1.
+        * inversion H1.
+        * inversion H1. split. auto. apply H. auto. auto. 
+  Qed.
+
+  Definition lista_mergeS {A} {AS : Setoid A} := injF2 (@lista_merge A AS) _.
+
+Fixpoint list_delete {A : Type} {AS : Setoid A}  (n : nat) (l : list A) {struct l} : list A :=
+  match l with
+    | [] => []
+    | a' :: l' =>
+      match n with
+        | O => l'
+        | S n' => a' :: list_delete n' l' 
+      end
+  end
+.
+
+Definition lista_delete {A : Type} {AS : Setoid A} {AP : Pointed A} (n : nat)  (l : lista A) : lista A :=
+  match l with
+    | listaCons _  l' => listaCons _ (list_delete n l')
+  end
+.
+
+Instance lista_delete_Proper {A : Type} {AS : Setoid A} AP : Proper (equiv ==> equiv ==> equiv ) (@lista_delete A AS AP).
+Proof.
+  autounfold. intros. destruct x0, y0.  simpl. simpl in H. rewrite H. clear x H. generalize y H0. clear y H0. apply list_ind_2 with (l1:=l) (l2:=l0).
+  - intros. reflexivity. 
+  - intros. destruct y.
+    + simpl. simpl in H0. tauto.
+    + simpl. destruct H0. split. auto. apply H. auto.
+  - intros. destruct y.
+    + simpl. simpl in H0. tauto.
+    + simpl. destruct H0. split. auto. apply H. auto.
+  - intros. destruct y.
+    + simpl. simpl in H0. tauto.
+    + simpl. destruct H0. split. auto. apply H. auto.
+Qed.
+
+Definition lista_deleteS {A} {AS : Setoid A} {AP : Pointed A} :=
+  injF2 (@lista_delete A AS AP) _.

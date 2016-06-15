@@ -100,33 +100,42 @@ Definition unionDatabases : databaseS ~> databaseS ~~> databaseS :=
 
 
 
-Definition caseSqlVal {A} {AS : Setoid A} (nat1 : natS ~> AS) (addr1 : natS ~*~ natS ~> AS) (row1 : listS sqlValS ~> AS) val1 : A :=
+Definition caseSqlVal {A} {AS : Setoid A} (nat1 : natS ~> AS) (addr1 : natS ~*~ natS ~> AS) (func1 : sqlFuncS ~> AS) (nil1 : A) (row1 : sqlValS ~> sqlValS ~~> AS) val1 : A :=
   match val1 with
     | vNat n => nat1 @ n
-    | vAddr a => addr1 @ a
+    | vAddr n => addr1 @ n
+    | vFunc a => func1 @ a
+    | vRow a b => row1 @ a @ b
+    | vNil => nil1
   end
 .
 
-Instance caseSqlVal_Proper A AS : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv) (@caseSqlVal A AS).
+Instance caseSqlVal_Proper A AS : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv ==> equiv ==> equiv) (@caseSqlVal A AS).
 Proof.
-  autounfold. intros. unfold caseSqlVal. simpl in H2. rewrite H2. destruct y2. 
-  rewritesr.
-  rewritesr. 
+  autounfold. intros. simpl in H4.  rewrite H4. induction y4.
+  - simpl. rewritesr.
+  - simpl. rewritesr.
+  - auto. 
+  - simpl. rewritesr.
+  - simpl. rewritesr. 
 Qed.
 
-Definition caseSqlValS {A AS} := injF4 (@caseSqlVal A AS) _.
+Definition caseSqlValS {A AS} := injF6 (@caseSqlVal A AS) _.
 
 Definition extractAddrS : sqlValS ~> maybeS (natS ~*~ natS) :=
   caseSqlValS
     @ (constS _ @ None)
     @ (SomeS)
-    @ (constS _ @ None).
+    @ (constS _ @ None)
+    @ None
+    @ (constS _ @ (constS _ @ None)).
 
 Definition extractNatS : sqlValS ~> maybeS natS :=
   caseSqlValS
     @ (SomeS)
     @ (constS _ @ None)
-    @ (constS _ @ None).
+    @ (constS _ @ None)    @ None
+    @ (constS _ @ (constS _ @ None)).
 
 Instance vNat_Proper : Proper (equiv ==> equiv) vNat.
 Proof.

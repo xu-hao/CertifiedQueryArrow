@@ -8,10 +8,9 @@ Require Import FMapWeakList List RelationClasses Relation_Definitions Morphisms 
 Section Assert.
   Context
     {pred : Type}
-    {val : Type}
     {builtin : Type}.
 
-  Definition expr := @expr val builtin.
+  Definition expr := @expr builtin.
 
   Inductive assertion :=
   | emp : assertion
@@ -36,22 +35,21 @@ End Assert.
   Notation "a -∗ b" := (sepImp a b) (right associativity, at level 83).
   Notation "'aexists' v , a" := (aExists v a) (at level 85).
   
-  Module AssertModel (TT: TypeType ) (AT : AddrType ) (PT : PredType) (VT : ValType)
-          (S : Store VT) (H : Heap TT AT PT VT) (B: BuiltInExpr TT AT PT VT S H) .
-  Module EM := ExprModel TT AT PT VT S H B.
+  Module AssertModel (TT: TypeType ) (AT : AddrType ) (PT : PredType) (VT : ValType)  (S : Store VT) (H : Heap TT AT PT VT) (B: BuiltInExpr VT S).
+  Module EM := ExprModel VT S B.
   Module HU := HeapUtils TT AT PT VT H.
-  Import TT AT PT VT EM S H HU.
-  Definition assertion := @assertion pred val B.builtInExpr.
-  Instance assertionS : Setoid assertion := @assertionS pred val B.builtInExpr.
+  Import TT AT PT VT EM S H B HU.
+  Definition assertion := @assertion pred builtInExpr.
+  Instance assertionS : Setoid assertion := @assertionS pred builtInExpr.
 
   Fixpoint _models (a : assertion) (s : S.t) (h : H.t) {struct a} : Prop :=
     match a with
       | emp => ~exists a, inDom @ a @ h
       | [[ expr , pred ]] ⟼ expr2 =>
         exists val val2 addr1,
-        ⟦ expr ⟧expr s h == Some val /\
+        ⟦ expr ⟧expr s == Some val /\
         extractAddr @ val == Some addr1 /\                             
-        ⟦ expr2 ⟧expr s h == Some val2 /\
+        ⟦ expr2 ⟧expr s == Some val2 /\
         singleton @ addr1 @ pred @ val2 @ h
       | a0 ∗ a1 => exists h0 h1,
                      h0 ⊥ h1 /\ h0 ⋅ h1 == h /\ _models a0 s h0  /\ _models a1 s h1

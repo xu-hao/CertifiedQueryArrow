@@ -8,33 +8,15 @@ Section Command.
   Context
     {type : Type}
     {pred : Type}
-    {val : Type}
     {builtInExpr : Type}
-    {builtInFormula : Type}
     {builtInCommand : Type}.
 
-  Definition expr := @expr val builtInExpr. 
+  Definition expr := @expr builtInExpr. 
   
-  Inductive formula :=
-  | formFilter : expr -> pred -> expr -> formula
-  | formBuiltInFilter : builtInFormula -> list expr -> formula
-  | formLookupBySubject : expr -> pred -> var -> formula
-  | formLookupByObject : var -> pred -> expr -> formula
-  | formLookupByPred : var -> pred -> var -> formula
-  | formAnd : formula -> formula -> formula
-  | formOr : formula -> formula -> formula
-  | formExists : var -> formula -> formula
-  | formNot : formula -> formula
-  | formTrue : formula
-  .
-
-
-  Program Instance formulaS : Setoid formula.
-
   Inductive command :=
-  | cClassical : formula -> command
   | cNewAddr : var -> type -> command
-  | cBuiltIn : builtInCommand -> list expr -> command
+  | cFilter : expr -> pred -> expr -> command
+  | cBuiltIn : builtInCommand -> command
   | cLookupBySubject : expr -> pred -> var -> command
   | cLookupByObject : var -> pred -> expr -> command
   | cLookupByPred : var -> pred -> var -> command
@@ -44,30 +26,56 @@ Section Command.
   | cChoice : command -> command -> command
   | cOne : command
   | cZero : command
+  | cClearVar : var -> command
+  | cExists : command -> command
+  | cNot : command -> command
   .
 
   Program Instance commandS : Setoid command.
 
-  Fixpoint formFreeVars form :=
-    match form with
-      | formFilter expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-      | formBuiltInFilter builtin exprs => fold_right FSetNat.union ∅ (map exprFreeVars exprs)
-      | formLookupBySubject  expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
-      | formLookupByObject  var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
-      | formLookupByPred  var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
-      | formNot form => formFreeVars form
-      | formExists v form => FSetNat.diff (formFreeVars form) (﹛ v ﹜)
-      | formAnd comm  comm2 => formFreeVars comm ∪ formFreeVars comm2
-      | formOr comm  comm2 => formFreeVars comm ∪ formFreeVars comm2
-      | formTrue => ∅
-    end
-  .
-  
-  Fixpoint cFreeVars comm :=
+End Command.
+
+Notation "𝟏" := (cOne) (at level 82).
+Notation "𝟎" := (cZero) (at level 82).
+Notation "∃ b" := (cExists b) (at level 83).
+Notation "¬ a" := (cNot a) (at level 80).
+Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
+Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
+
+
+Module Types (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
+  Definition state A {AS : Setoid A} : Type := @sh _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
+
+  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @shS _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
+  Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad.
+End Types.
+
+Module Type BuiltInCommand (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
+  Import TT AT PT VT.
+  Module TS := Types TT AT PT VT S H.
+  Import TS.
+  Parameter builtInCommand : Type.
+  Parameter builtInCommandS : Setoid builtInCommand.
+  Parameter freeVarsBuiltInCommand : builtInCommandS ~> varSetS.
+  Parameter interpretBuiltInCommand : builtInCommandS ~> stateS unitS.
+End BuiltInCommand.
+
+Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
+       (S : Store VT) (H : Heap TT AT PT VT) (B : BuiltInExpr VT S)
+       (BIC : BuiltInCommand TT AT PT VT S H).
+  Open Scope type_scope.
+  Module EM := ExprModel VT S B.
+  Module HU := HeapUtils TT AT PT VT H.
+  Module TS := Types TT AT PT VT S H.
+  Import TT AT PT VT EM S H HU B BIC TS.
+  Definition command := @command type pred builtInExpr builtInCommand.
+  Instance commandS : Setoid command := @commandS type pred builtInExpr builtInCommand.
+      
+  Fixpoint cFreeVars (comm : command) :=
     match comm with
-      | cClassical form => formFreeVars form
       | cNewAddr var type  => ﹛ var ﹜
-      | cBuiltIn _ exprs => fold_right FSetNat.union ∅ (map exprFreeVars exprs)
+      | cFilter expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
+      | cBuiltIn builtin => freeVarsBuiltInCommand @ builtin
       | cLookupBySubject expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
       | cLookupByObject var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
       | cLookupByPred var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
@@ -77,71 +85,12 @@ Section Command.
       | cChoice comm comm2 => cFreeVars comm ∪ cFreeVars comm2
       | cOne => ∅
       | cZero => ∅
+      | cNot form => cFreeVars form
+      | cClearVar v => ﹛ v ﹜
+      | cExists form => cFreeVars form
     end
   .
-End Command.
-Notation "a ∧ b" := (formAnd a b) (left associativity, at level 81).
-Notation "a ∨ b" := (formOr a b) (left associativity, at level 82).
-Notation "∃ a : b" := (formExists a b) (at level 83).
-Notation "¬ a" := (formNot a) (at level 80).
-Notation "⊤" := (formTrue) (at level 80).
 
-Notation "𝟏" := (cOne) (at level 82).
-Notation "𝟎" := (cZero) (at level 82).
-Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
-Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
-
-
-Module Type BuiltInFormula (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
-  Import TT AT PT VT.
-  Parameter builtInFormula : Type.
-  Parameter builtInFormulaS : Setoid builtInFormula.
-  Parameter appBIF : builtInFormulaS ~> listS valS ~~> H.tS ~~> S.tS ~~> H.lS _ S.tS.
-End BuiltInFormula.
-
-Section Types.
-
-  Context
-    {H}
-    {HS : Setoid H}
-    {S}
-    {SS : Setoid S}
-    {l}
-    {lS : forall A (AS : Setoid A), Setoid (l A AS)}.
-  
-  Definition state0 A {AS : Setoid A} : Type := @sh _ HS _ SS _ (lS) _ unitS _ AS.
-
-  Instance state0S {A} (AS : Setoid A) : Setoid (state0 A) := @shS _ HS _ SS _ (lS) _ unitS _ AS.
-
-End Types.
-
-Module Type BuiltInCommand (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
-  Import TT AT PT VT.
-  Definition state A {AS : Setoid A} : Type := @state0 _ H.tS _ S.tS _ (H.lS) _ AS.
-
-  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @state0S _ H.tS _ S.tS _ (H.lS) _ AS.
-  Parameter builtInCommand : Type.
-  Parameter builtInCommandS : Setoid builtInCommand.
-  Parameter appBIC : builtInCommandS ~> listS valS ~~> stateS unitS.
-End BuiltInCommand.
-
-Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
-        (S : Store VT) (H : Heap TT AT PT VT) (BIE : BuiltInExpr TT AT PT VT S H) 
-       (BIF : BuiltInFormula TT AT PT VT S H) (BIC : BuiltInCommand TT AT PT VT S H).
-  Open Scope type_scope.
-  Module EM := ExprModel TT AT PT VT  S H BIE.
-  Module HU := HeapUtils TT AT PT VT H.
-  Import TT AT PT VT EM S H HU BIE BIF BIC.
-  Definition formula := @formula pred val builtInExpr builtInFormula.
-  Instance formulaS : Setoid formula := @formulaS pred val builtInExpr builtInFormula.
-  Definition command := @command type pred val builtInExpr builtInFormula builtInCommand.
-  Instance commandS : Setoid command := @commandS type pred val builtInExpr builtInFormula builtInCommand.
-      
-  Definition state A {AS : Setoid A} : Type := @state0 _ H.tS _ S.tS _ (lS) _ AS.
-
-  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @state0S _ H.tS _ S.tS _ (lS) _ AS.
-
-  Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad.
 
   Definition stateStoreHeapS := @storeHeapS _ H.tS _ S.tS _ (lS) _ unitS.
 
@@ -264,8 +213,7 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
   Definition evalExpr : exprS ~> stateS valS.
     simple refine (injF (fun expr1 => 
                            (exprEval
-                             <$> getHeap
-                             <*> getStore
+                             <$> getStore
                              <*> pure @ expr1) >>= stopNone) _).
   Defined.
 
@@ -436,19 +384,16 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     solve_properS lookupByPredGeneric.
   Qed.
 
-  Section BuiltInFilterGeneric.
+  Section BuiltInGeneric.
     Context
-      (builtin : builtInFormula) (args : list expr).
-    Definition builtInFilterGeneric : state unit :=
-      (appBIF
-         @ builtin
-         <$> mapM @ evalExpr @ args
-         <*> getHeap
-         <*> getStore) >>= branchStore.
-  End BuiltInFilterGeneric.
-  Instance builtInFilterGeneric_Proper : Proper (equiv ==> equiv ==> equiv) builtInFilterGeneric.
+      (builtin : builtInCommand).
+    Definition builtInGeneric : state unit :=
+      (interpretBuiltInCommand
+         @ builtin).
+  End BuiltInGeneric.
+  Instance builtInGeneric_Proper : Proper (equiv ==> equiv) builtInGeneric.
   Proof.
-    solve_properS builtInFilterGeneric.
+    solve_properS builtInGeneric.
   Qed.
 
   Section NegationGeneric.
@@ -461,113 +406,81 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     solve_properS negationGeneric.
   Qed.
   
+  Section ClearVarGeneric.
+    Context
+      (v : var).
+    Definition clearVarGeneric : state unit :=
+      updateStore @ (S.delete @ v).
+  End ClearVarGeneric.
+  Instance clearVarGeneric_Proper : Proper (equiv ==> equiv) clearVarGeneric.
+  Proof.
+    solve_properS clearVarGeneric.
+  Qed.
+
   Section ExistentialQuantificationGeneric.
     Context
-      (a : state unit) (v : var).
+      (a : state unit).
     Definition existentialQuantificationGeneric : state unit :=
-      run @ (updateStore @ (S.delete @ v) >> a) >>= stopNull.
+      run @ a >>= stopNull.
   End ExistentialQuantificationGeneric.
-  Instance existentialQuantificationGeneric_Proper : Proper (equiv ==> equiv ==> equiv) existentialQuantificationGeneric.
+  Instance existentialQuantificationGeneric_Proper : Proper (equiv ==> equiv) existentialQuantificationGeneric.
   Proof.
     solve_properS existentialQuantificationGeneric.
   Qed.
 
-  Section ClassicalGeneric.
-    Context
-      (a : state unit).
-    Definition classicalGeneric : state unit :=
-      run @ a >>= stopNull.
-  End ClassicalGeneric.
-  Instance classicalGeneric_Proper : Proper (equiv ==> equiv) classicalGeneric.
-  Proof.
-    solve_properS classicalGeneric.
-  Qed.
   
   Existing Instance sh_NearSemiRing.
-  Fixpoint _formReduce (form : formula) {struct form}: state unit :=
-   
-    match form with
-      | formFilter expr pred expr2  =>
-        lookupBySPOGeneric expr pred expr2
-      | formBuiltInFilter builtin args =>
-        builtInFilterGeneric builtin args
-      | formLookupBySubject  expr pred var =>
-        lookupBySubjectGeneric   expr pred var
-      | formLookupByObject var pred expr =>
-        lookupByObjectGeneric  var pred expr 
-      | formLookupByPred var pred var2 =>
-        lookupByPredGeneric var pred var2
-      | form0 ∧ form1 =>
-        plus @ (_formReduce form0) @ (_formReduce form1)
-      | form0 ∨ form1 => 
-        times @ (_formReduce form0) @ (_formReduce form1)
-      | ¬ form =>
-        negationGeneric (_formReduce form)
-      | ∃ v : form =>
-        existentialQuantificationGeneric (_formReduce form)   v      
-      | ⊤ => one
-    end.
-  
-Definition formReduce : formulaS ~> stateS unitS.
-  simple refine (injF _formReduce _).
-Defined.
 
 
 
-Section MutateGeneric.
-  Context
-    (expr1 : expr) (pred0 : pred) (expr2 : expr).
+  Section MutateGeneric.
+    Context
+      (expr1 : expr) (pred0 : pred) (expr2 : expr).
 
-  Definition mutateGeneric : state unit :=
-    (H.update
-      <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
-      <*> pure @ pred0 
-      <*> evalExpr @ expr2
-      <*> getHeap) >>= putHeap.
-End MutateGeneric.
-Instance mutateGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) mutateGeneric.
-Proof.
-  solve_properS mutateGeneric.
-Qed.
+    Definition mutateGeneric : state unit :=
+      (H.update
+         <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
+         <*> pure @ pred0 
+         <*> evalExpr @ expr2
+         <*> getHeap) >>= putHeap.
+  End MutateGeneric.
+  Instance mutateGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) mutateGeneric.
+  Proof.
+    solve_properS mutateGeneric.
+  Qed.
 
-Section NewAddrGeneric.
-  Context
-    (var1 : var) (type1 : type).
-  Definition newAddrGeneric : state unit :=
-    ((idS *** addrToVal) <$> ((H.newAddr @ type1 <$> getHeap) >>= stopNone)) >>= updateVar2 var1.
-End NewAddrGeneric.
-Instance newAddrGeneric_Proper : Proper (equiv ==> equiv ==> equiv) newAddrGeneric.
-Proof.
-  solve_properS newAddrGeneric.
-Qed.
+  Section NewAddrGeneric.
+    Context
+      (var1 : var) (type1 : type).
+    Definition newAddrGeneric : state unit :=
+      ((idS *** addrToVal) <$> ((H.newAddr @ type1 <$> getHeap) >>= stopNone)) >>= updateVar2 var1.
+  End NewAddrGeneric.
+  Instance newAddrGeneric_Proper : Proper (equiv ==> equiv ==> equiv) newAddrGeneric.
+  Proof.
+    solve_properS newAddrGeneric.
+  Qed.
 
-Section BuiltInCommandGeneric.
-  Context
-    (builtin : builtInCommand) (args : list expr).
-  Definition builtInCommandGeneric : state unit :=
-    mapM @ evalExpr @ args >>= appBIC @ builtin.
-End BuiltInCommandGeneric.
-Instance builtInCommandGeneric_Proper : Proper (equiv ==> equiv ==> equiv) builtInCommandGeneric.
-Proof.
-  solve_properS builtInCommandGeneric.
-Qed.
 
-Section DeleteGeneric.
-  Context
-    (expr1 : expr).
-  Definition deleteGeneric : state unit :=
-    (H.delete
-       <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
-       <*> getHeap) >>= putHeap.
-End DeleteGeneric.
+  Section DeleteGeneric.
+    Context
+      (expr1 : expr).
+    Definition deleteGeneric : state unit :=
+      (H.delete
+         <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
+         <*> getHeap) >>= putHeap.
+  End DeleteGeneric.
 
-Instance DeleteGeneric_Proper : Proper (equiv ==> equiv) deleteGeneric.
-Proof.
-  solve_proper.
-Qed.
+  Instance DeleteGeneric_Proper : Proper (equiv ==> equiv) deleteGeneric.
+  Proof.
+    solve_proper.
+  Qed.
 
 Fixpoint _reduce (comm : command)  : state unit :=
     match comm with
+      | cFilter expr pred expr2  =>
+        lookupBySPOGeneric expr pred expr2
+      | cBuiltIn builtin  =>
+        builtInGeneric builtin
       | cLookupBySubject  expr pred var =>
         lookupBySubjectGeneric expr pred var
       | cLookupByObject var  pred expr =>
@@ -582,14 +495,16 @@ Fixpoint _reduce (comm : command)  : state unit :=
         mutateGeneric expr pred0 expr2
       | cNewAddr var type =>
         newAddrGeneric var type
-      | cBuiltIn builtin exprs =>
-        builtInCommandGeneric builtin exprs
       | cDelete expr =>
         deleteGeneric expr
       | 𝟏 => one
       | 𝟎 => zero
-      | cClassical form =>
-        classicalGeneric (formReduce @ form)
+      | ¬ form =>
+        negationGeneric (_reduce form)
+      | cClearVar var =>
+        clearVarGeneric var
+      | ∃ form =>
+        existentialQuantificationGeneric (_reduce form) 
     end
   .
 
@@ -606,10 +521,10 @@ Fixpoint _reduce (comm : command)  : state unit :=
 End CommandModel.
 
 Module SemanticEquivalence (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
-       (S : Store VT)    (H : Heap TT AT PT VT) (BIE : BuiltInExpr TT AT PT VT S H)
-       (BIF : BuiltInFormula TT AT PT VT S H) (BIC : BuiltInCommand TT AT PT VT S H).
-  Module EM := ExprModel TT AT PT VT  S H BIE.
-  Module CM := CommandModel TT AT PT VT S  H BIE BIF BIC.
+       (S : Store VT)    (H : Heap TT AT PT VT) (B : BuiltInExpr VT S)
+       (BIC : BuiltInCommand TT AT PT VT S H).
+  Module EM := ExprModel VT  S B.
+  Module CM := CommandModel TT AT PT VT S  H B BIC.
   Import TT AT PT VT S H EM CM.
   Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
   

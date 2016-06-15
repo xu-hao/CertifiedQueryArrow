@@ -21,18 +21,68 @@ Definition sqlAddr := nat (* table index *) * nat (* row index *).
 
 Instance sqlAddrS : Setoid sqlAddr := natS ~*~ natS.
 
+(* define a list of builtin function values *)
+Inductive sqlFunc :=
+| sqlSuccFunc : sqlFunc
+.
+
+Instance sqlFuncS : Setoid sqlFunc :=
+  {
+    equiv := eq
+  }
+.
+
+
 Inductive sqlVal :=
 | vNat : nat -> sqlVal
 | vAddr : sqlAddr -> sqlVal
+| vNil : sqlVal
+| vRow : sqlVal -> sqlVal -> sqlVal
+| vFunc : sqlFunc -> sqlVal
 .
 
-Program Instance sqlValS : Setoid sqlVal.
+Instance sqlValS : Setoid sqlVal :=
+  {
+    equiv := eq
+  }
+.
+
 
 Module SQLValType <: ValType.
   Definition val := sqlVal.
 
   Instance valS : Setoid sqlVal := sqlValS.
 
+  Definition storable v :=
+    match v with
+      | vNat _ => true
+      | vAddr _ => true
+      | vNil => true (* null *)
+      | vRow _ _ => false
+      | vFunc _ => false
+    end.
+
+  Instance storable_Proper : Proper (equiv ==> equiv) storable.
+  Proof.
+    solve_properS storable.
+  Qed.
+
+  Definition storableS := injF storable _.
+
+  Definition _appVal v1 v2 :=
+    match v1, v2 with
+      | vFunc sqlSuccFunc, vNat n => Some (vNat (S n))
+      | _, _ => None
+    end
+  .
+
+  Instance _appVal_Proper : Proper (equiv ==> equiv) _appVal.
+  Proof.
+    solve_properS _appVal.
+  Qed.
+
+  Definition appVal := injF2 _appVal _.
+  
   Fixpoint equiv_dec val1 val2 : {val1 == val2} + {~ val1 == val2}.
   Proof.
     destruct val1, val2.
@@ -40,11 +90,37 @@ Module SQLValType <: ValType.
     right. congruence.
     right. intro. inversion H.
     right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
     destruct s as [n n0], s0 as [n1 n2].
-    destruct (Nat.eq_dec n n1), (Nat.eq_dec n0 n2). left. congruence.
+    destruct (Nat.eq_dec n n1), (Nat.eq_dec n0 n2).
+    left. congruence.
+    right. congruence.
+    right. congruence.
+    right. congruence. 
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    left. congruence.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    destruct (equiv_dec val1_1 val2_1) as [n| n0], (equiv_dec val1_2 val2_2) as [n1| n2].
+    left. congruence.
     right. intro. inversion H. tauto.
     right. intro. inversion H. tauto.
     right. intro. inversion H. tauto.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    right. intro. inversion H.
+    destruct s, s0.    left. congruence.
   Qed.
 End SQLValType.
 
@@ -56,128 +132,103 @@ Section SQLSyntax.
 
 
   Inductive sqlExpr :=
-  | sqlValExpr : sqlVal -> sqlExpr
+  | sqlValExpr : sqlBuiltInExprT -> sqlExpr
   | sqlVarExpr : var -> sqlExpr
-  | sqlAppExpr : sqlBuiltInExprT -> list sqlExpr -> sqlExpr
+  | sqlAppExpr : sqlExpr -> sqlExpr -> sqlExpr
   | sqlColExpr : sqlExpr -> nat (* col index *) -> sqlExpr
   .
 
-  Program Instance sqlExprS : Setoid sqlExpr. 
+  Instance sqlExprS : Setoid sqlExpr :=
+    {
+      equiv := eq
+    }
+  .
+  
 
   Inductive sqlFormula :=
-  | sqlBuiltInFormula : sqlBuiltInFormulaT -> list sqlExpr -> sqlFormula
+  | sqlBuiltIn : sqlBuiltInFormulaT -> sqlExpr -> sqlExpr -> sqlFormula
   | sqlAnd : sqlFormula -> sqlFormula -> sqlFormula
   | sqlOr : sqlFormula -> sqlFormula -> sqlFormula
   | sqlNot : sqlFormula -> sqlFormula
   | sqlExists : sql -> sqlFormula
   with
   sql :=
-  | sqlQuery : list sqlExpr -> list (sqlTableExpr * var) -> sqlFormula -> sql
-  with
-  sqlTableExpr :=
-  | sqlTable : nat (* table index *) -> sqlTableExpr
-  | sqlSelect : sql -> sqlTableExpr
+  | sqlQuery : list (sqlExpr * var) -> list (nat (* table index *) * var) -> sqlFormula -> sql
   .
 
-  Program Instance sqlFormulaS : Setoid sqlFormula.
-  Program Instance sqlS : Setoid sql.
-  Program Instance sqlTableExprS : Setoid sqlTableExpr.
+  Instance sqlFormulaS : Setoid sqlFormula :=
+    {
+      equiv := eq
+    }
+  .
+  
+  Instance sqlS : Setoid sql :=
+    {
+      equiv := eq
+    }
+  .
   
   Inductive sqlStmt :=
   | sqlQueryStmt : sql -> sqlStmt
   | sqlInsertStmt : nat (* table index *) -> sql -> sqlStmt
-  | sqlUpdateStmt : nat -> nat (* col index *) -> sqlExpr -> sqlFormula -> sqlStmt
-  | sqlDeleteStmt : nat -> sqlFormula -> sqlStmt
+  | sqlUpdateStmt : nat (* table index *) -> var -> list (nat (* col index *) * sqlExpr) -> sqlFormula -> sqlStmt
+  | sqlDeleteStmt : nat (* table index *) -> var -> sqlFormula -> sqlStmt
   .
 
-  Program Instance sqlStmtS : Setoid sqlStmt.
-  
-
-Section SQLExprInductionPrinciple.
-  Variables (p : sqlExpr -> Prop) (Q : list sqlExpr -> Prop).
-
-  Hypothesis
-    (pval : forall val, p (sqlValExpr val))
-    (pvar : forall var, p (sqlVarExpr var))
-    (pcol : forall e, p e -> forall col, p (sqlColExpr e col))
-    (papp0 : Q List.nil)
-    (papp1 : forall e, p e -> forall l, Q l -> Q (e :: l))
-    (papp : forall builtin l, Q l -> p (sqlAppExpr builtin l)).
-  
-    Fixpoint sqlExpr_ind_2 e : p e :=
-    match e as x return p x with
-      | sqlValExpr val => pval val
-      | sqlVarExpr var => pvar var
-      | sqlColExpr e col => pcol e (sqlExpr_ind_2 e) col
-      | sqlAppExpr builtin l =>
-        papp builtin l ((
-               fix dep_fold_right (l' : list sqlExpr) : Q l' :=
-                 match l' as x return Q x with
-                   | List.nil => papp0
-                   | e :: es => papp1 e (sqlExpr_ind_2 e) es (dep_fold_right es)
-                 end
-             ) l)
-    end.
-End SQLExprInductionPrinciple.
+  Program Instance sqlStmtS : Setoid sqlStmt :=
+    {
+      equiv := eq
+    }
+  .
 
 Section SQLFormulaDoubleInductionPrinciple.
   Variables
     (p : sqlFormula -> sqlFormula -> Prop)
     (q : sql -> sql -> Prop)
-    (u : list (sqlTableExpr * var) -> list (sqlTableExpr * var) -> Prop)
-    (v : sqlTableExpr -> sqlTableExpr -> Prop)    
   .
 
   Hypothesis
-    (pbibi : forall bi args bi2 args2, p (sqlBuiltInFormula bi args) (sqlBuiltInFormula bi2 args2))
-    (pbiand : forall bi args a b, p (sqlBuiltInFormula bi args) (sqlAnd a b))
-    (pbior : forall bi args a b, p (sqlBuiltInFormula bi args) (sqlOr a b))
-    (pbinot : forall bi args a, p (sqlBuiltInFormula bi args) (sqlNot a))
-    (pbiexi : forall bi args s, p (sqlBuiltInFormula bi args) (sqlExists s))
-    (pandbi : forall x y bi2 args2, p (sqlAnd x y) (sqlBuiltInFormula bi2 args2))
+    (pbibi : forall bi e1 e2 bi2 e3 e4, p (sqlBuiltIn bi e1 e2) (sqlBuiltIn bi2 e3 e4))
+    (pbiand : forall bi e1 e2 a b, p (sqlBuiltIn bi e1 e2) (sqlAnd a b))
+    (pbior : forall bi e1 e2 a b, p (sqlBuiltIn bi e1 e2) (sqlOr a b))
+    (pbinot : forall bi e1 e2 a, p (sqlBuiltIn bi e1 e2) (sqlNot a))
+    (pbiexi : forall bi e1 e2 s, p (sqlBuiltIn bi e1 e2) (sqlExists s))
+    (pandbi : forall x y bi2 e3 e4, p (sqlAnd x y) (sqlBuiltIn bi2 e3 e4))
     (pandand : forall x y a b, p x a -> p y b -> p (sqlAnd x y) (sqlAnd a b))
     (pandor : forall x y a b, p (sqlAnd x y) (sqlOr a b))
     (pandnot : forall x y a, p (sqlAnd x y) (sqlNot a))
     (pandexi : forall x y s, p (sqlAnd x y)  (sqlExists s))
-    (porbi : forall x y bi2 args2, p (sqlOr x y) (sqlBuiltInFormula bi2 args2))
+    (porbi : forall x y bi2 e3 e4, p (sqlOr x y) (sqlBuiltIn bi2 e3 e4))
     (porand : forall x y a b, p (sqlOr x y) (sqlAnd a b))
     (poror : forall x y a b, p x a -> p y b -> p (sqlOr x y) (sqlOr a b))
     (pornot : forall x y a, p (sqlOr x y) (sqlNot a))
     (porexi : forall x y s, p (sqlOr x y)  (sqlExists s))
-    (pnotbi : forall x bi2 args2, p (sqlNot x) (sqlBuiltInFormula bi2 args2))
+    (pnotbi : forall x bi2 e3 e4, p (sqlNot x) (sqlBuiltIn bi2 e3 e4))
     (pnotand : forall x a b, p (sqlNot x) (sqlAnd a b))
     (pnotor : forall x a b, p (sqlNot x) (sqlOr a b))
     (pnotnot : forall x a, p x a -> p (sqlNot x) (sqlNot a))
     (pnotexi : forall x s, p (sqlNot x)  (sqlExists s))
-    (pexibi : forall r bi2 args2, p (sqlExists r) (sqlBuiltInFormula bi2 args2))
+    (pexibi : forall r bi2 e3 e4, p (sqlExists r) (sqlBuiltIn bi2 e3 e4))
     (pexiand : forall r a b, p (sqlExists r) (sqlAnd a b))
     (pexior : forall r a b, p (sqlExists r) (sqlOr a b))
     (pexinot : forall r a, p (sqlExists r) (sqlNot a))
     (pexiexi : forall r s, q r s -> p (sqlExists r)  (sqlExists s))
-    (qqueque : forall es1 es2 tel1 tel2 a b, u tel1 tel2 -> p a b -> q (sqlQuery es1 tel1 a) (sqlQuery es2 tel2 b))
-    (vtabtab : forall t1 t2, v (sqlTable t1) (sqlTable t2))
-    (vtabsel : forall t1 q2, v (sqlTable t1) (sqlSelect q2))
-    (vseltab : forall q1 t2, v (sqlSelect q1) (sqlTable t2))
-    (vselsel : forall q1 q2, q q1 q2 -> v (sqlSelect q1) (sqlSelect q2))
-    (unilnil : u nil nil)
-    (unilcons : forall te tel, u nil tel -> u nil (te :: tel))
-    (uconsnil : forall te tel, u tel nil -> u (te :: tel) nil)
-    (uconscons : forall te1 v1 tel1 te2 v2 tel2, v te1 te2 -> u tel1 tel2 -> u ((te1, v1) :: tel1) ((te2, v2) :: tel2))
+    (qqueque : forall es1 es2 tel1 tel2 a b, p a b -> q (sqlQuery es1 tel1 a) (sqlQuery es2 tel2 b))
   .
   
     Fixpoint sqlFormula_ind_2 f1 f2 : p f1 f2 :=
       match f1 in sqlFormula return p f1 f2 with
-        | sqlBuiltInFormula bi args =>
-          match f2  in sqlFormula return p (sqlBuiltInFormula bi args) f2 with
-            | sqlBuiltInFormula bi2 args2 => pbibi bi args bi2 args2
-            | sqlAnd a b => pbiand bi args a b
-            | sqlOr a b => pbior bi args a b
-            | sqlNot a => pbinot bi args a 
-            | sqlExists s => pbiexi bi args s
+        | sqlBuiltIn bi e1 e2 =>
+          match f2  in sqlFormula return p (sqlBuiltIn bi e1 e2) f2 with
+            | sqlBuiltIn bi2 e3 e4 => pbibi bi e1 e2 bi2 e3 e4
+            | sqlAnd a b => pbiand bi e1 e2 a b
+            | sqlOr a b => pbior bi e1 e2 a b
+            | sqlNot a => pbinot bi e1 e2 a 
+            | sqlExists s => pbiexi bi e1 e2 s
           end
         | sqlAnd x y =>
           match f2 in sqlFormula return p (sqlAnd x y) f2 with
-            | sqlBuiltInFormula bi2 args2 => pandbi x y bi2 args2
+            | sqlBuiltIn bi2 e3 e4 => pandbi x y bi2 e3 e4
             | sqlAnd a b => pandand x y a b (sqlFormula_ind_2 x a) (sqlFormula_ind_2 y b)
             | sqlOr a b => pandor x y a b
             | sqlNot a => pandnot x y a 
@@ -185,7 +236,7 @@ Section SQLFormulaDoubleInductionPrinciple.
           end
         | sqlOr x y =>
           match f2 in sqlFormula return p (sqlOr x y) f2 with
-            | sqlBuiltInFormula bi2 args2 => porbi x y bi2 args2
+            | sqlBuiltIn bi2 e3 e4 => porbi x y bi2 e3 e4
             | sqlAnd a b => porand x y a b
             | sqlOr a b => poror x y a b (sqlFormula_ind_2 x a) (sqlFormula_ind_2 y b)
             | sqlNot a => pornot x y a 
@@ -193,7 +244,7 @@ Section SQLFormulaDoubleInductionPrinciple.
           end
         | sqlNot x =>
           match f2 in sqlFormula return p (sqlNot x) f2 with
-            | sqlBuiltInFormula bi2 args2 => pnotbi x bi2 args2
+            | sqlBuiltIn bi2 e3 e4 => pnotbi x bi2 e3 e4
             | sqlAnd a b => pnotand x a b
             | sqlOr a b => pnotor x a b
             | sqlNot a => pnotnot x a (sqlFormula_ind_2 x a) 
@@ -201,7 +252,7 @@ Section SQLFormulaDoubleInductionPrinciple.
           end
         | sqlExists r =>
           match f2 in sqlFormula return p (sqlExists r) f2 with
-            | sqlBuiltInFormula bi2 args2 => pexibi r bi2 args2
+            | sqlBuiltIn bi2 e3 e4 => pexibi r bi2 e3 e4
             | sqlAnd a b => pexiand r a b
             | sqlOr a b => pexior r a b
             | sqlNot a => pexinot r a 
@@ -209,32 +260,7 @@ Section SQLFormulaDoubleInductionPrinciple.
               pexiexi r s ((fix h' (q1 q2 : sql) : q q1 q2 :=
                               match q1 in sql, q2 in sql return q q1 q2 with
                                 | sqlQuery es1 tel1 a, sqlQuery es2 tel2 b =>
-                                  qqueque es1 es2 tel1 tel2 a b
-                                          ((fix h'' (c d : list(sqlTableExpr * var)) : u c d :=
-                                              match c in list _ return u c d with
-                                                | nil =>
-                                                  (fix h''' (d' : list(sqlTableExpr * var)) : u nil d' :=
-                                                     match d' in list _ return u nil d' with
-                                                       | nil => unilnil
-                                                       | d' :: ds' => unilcons d' ds' (h''' ds')
-                                                     end) d
-                                                | (te, v1) :: cs' =>
-                                                  (fix h''' (d' : list(sqlTableExpr * var)) :=
-                                                     match d in list _ return u ((te, v1)::cs') d with
-                                                       | nil => uconsnil (te,v1) cs' (h'' cs' nil)
-                                                       | (te2, v2) :: ds' =>
-                                                         uconscons te v1 cs' te2 v2 ds' (
-                                                                     match te in sqlTableExpr, te2 in sqlTableExpr return v te te2 with
-                                                                       | sqlTable n1, sqlTable n2 => vtabtab n1 n2
-                                                                       | sqlTable n1, sqlSelect q2 => vtabsel n1 q2
-                                                                       | sqlSelect q1, sqlTable n2 => vseltab q1 n2
-                                                                       | sqlSelect q1, sqlSelect q2 => vselsel q1 q2 (h' q1 q2)
-                                                                     end
-                                                                   ) (h'' cs' ds')
-                                                     end) d
-                                              end
-                                           ) tel1 tel2)
-                                          (sqlFormula_ind_2 a b)
+                                  qqueque es1 es2 tel1 tel2 a b (sqlFormula_ind_2 a b)
                               end) r s)
           end
     end.
@@ -245,7 +271,7 @@ End SQLSyntax.
 Section SQLSemanticsDefs.
   Instance sqlVal_Pointed : Pointed sqlVal :=
     {
-      point := vNat 0
+      point := vNil
     }.
   
   Definition row := lista sqlVal.
@@ -453,5 +479,4 @@ Section SQLSemanticsDefs.
   Definition storesProd (ss1 ss2 : list store) : list store :=
     concat (map (fun s => map (fun s2 => storeProd s s2) ss2) ss1).
 
-End SQLSemanticsDefs
-.
+End SQLSemanticsDefs.

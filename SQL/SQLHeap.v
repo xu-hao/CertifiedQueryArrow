@@ -533,6 +533,9 @@ Proof.
     intros val ? ?. destruct val.
     - inversion H.
     - simpl in H. rewrite H. reflexivity.
+    - inversion H.
+    - inversion H.
+    - inversion H.
   Qed.
 Require Import MonadUtils.
   

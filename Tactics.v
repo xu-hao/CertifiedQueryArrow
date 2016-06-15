@@ -72,6 +72,10 @@ Ltac matchequiv := match goal with
                         | |- _ (match ?a with _ => _ end) ( match ?b with _ => _ end) => equiv a b
                       end.
 
+Ltac assertequiv := match goal with
+                        | |- _ (match ?a with _ => _ end) ( match ?b with _ => _ end) => assert (a == b)
+                      end.
+
 Ltac solve_properS a := autounfold; intros; unfold a; rewritesr.
 
   Lemma bool_case : forall b, b=true \/ b=false.

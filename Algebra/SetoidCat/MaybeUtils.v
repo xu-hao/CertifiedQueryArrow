@@ -1,4 +1,4 @@
-Require Import Algebra.PairUtils Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.MonoidUtils Algebra.SetoidUtils Tactics.
+Require Import Algebra.SetoidCat.PairUtils Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.SetoidUtils Tactics.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
@@ -62,46 +62,17 @@ Ltac destruct_maybe a :=
       simpl in *; rewrite H1 in * |
       destruct H2 as [x H2]; simpl in *; rewrite H2 in *].
 
-Section MaybeMonad.
+Definition maybe A {SA : Setoid A} := option A.
+Definition maybeS {A} (SA : Setoid A) := optionS SA.
 
-    Definition maybe A {SA : Setoid A} := option A.
-    Definition maybeS {A} (SA : Setoid A) := optionS SA.
+Lemma maybe_equiv_dec : forall {A} {AS :Setoid A} (r1 r2 : maybe A) (equiv_dec : forall a1 a2 : A, {a1 == a2} + {~a1 == a2}), {r1 == r2} + {~r1 == r2}.
+Proof.
+  intros.  destruct r1 as [n|], r2 as [n0 |].
+  - destruct (equiv_dec n n0).
+    + left. rewrite e. reflexivity. 
+    + right. intro. apply n1. auto. 
+  - right. intro. inversion H.
+  - right. intro. inversion H.
+  - left. reflexivity.
+Defined.
 
-
-    Section Bind.
-      Context
-        {A B : Type}
-        {SA : Setoid A}
-        {SB : Setoid B}.
-
-      Definition maybe_bind : (maybeS SA) ~> (SA ~~> maybeS SB) ~~> maybeS SB.
-
-        simple refine (injF2 (fun a f =>
-                                       caseMaybeS @ f @ None @ a
-                                    ) _).
-        Lemma maybe_bind_1 : Proper (equiv ==> equiv ==> equiv)
-                                    (fun (a : option A) (f : SA ~> maybeS SB) => caseMaybeS @ f @ None @ a).
-        Proof.
-          repeat autounfold. intros. rewritesr. 
-        Qed.
-        apply maybe_bind_1.
-      Defined.
-    End Bind.
-
-    Section Ret.
-            Context
-        {A : Type}
-        {SA : Setoid A}.
-
-      Definition maybe_ret : SA ~> maybeS SA := SomeS.
-    End Ret.
-
-    Instance maybe_Monad : @Monad maybe (@maybeS).
-    Proof.
-      exists (@maybe_ret) (@maybe_bind) .
-      intros. simpl. destruct f. simpl. destruct (x a). reflexivity.  reflexivity. 
-      intros. simpl. destruct a. simpl. reflexivity. simpl. auto.
-      intros. simpl. destruct f, g. simpl. destruct a. simpl. destruct (x a). simpl. destruct (x0 b). reflexivity. reflexivity. simpl. auto. simpl.  auto.
-    Defined.
-
-  End MaybeMonad.

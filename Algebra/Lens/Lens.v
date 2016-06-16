@@ -1,5 +1,5 @@
-Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad Tactics Utils Monoid MonoidUtils.
-Require Import SetoidClass List.
+Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.SetoidUtils Algebra.Monad Tactics Utils Monoid.
+Require Import SetoidClass.
 
 
 Existing Instance ConstS.

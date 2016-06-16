@@ -1,4 +1,4 @@
-Require Import Utils Algebra.SetoidCat Algebra.PairUtils Algebra.Monad Algebra.Monoid Algebra.Traversable Algebra.FoldableFunctor Algebra.Functor Algebra.SetoidUtils Algebra.Applicative Algebra.Alternative Tactics .
+Require Import Utils Algebra.SetoidCat Algebra.SetoidCat.PairUtils Algebra.Monad Algebra.Monoid Algebra.Traversable Algebra.FoldableFunctor Algebra.Functor Algebra.SetoidUtils Algebra.Applicative Algebra.Alternative Tactics Algebra.SetoidCat.BoolUtils.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 

@@ -1,4 +1,4 @@
-Require Import Definitions Algebra.Monoid  Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens ListLens MaybeLens Utils SetoidUtils MonoidUtils Pointed Lista Matrixp ListaLens MatrixpLens GenUtils.
+Require Import Definitions Algebra.Monoid  Algebra.SetoidCat Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe  Tactics Algebra.SetoidCat.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Monad Algebra.Lens.Lens ListLens MaybeLens Utils SetoidUtils Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.NatUtils Pointed Lista Matrixp ListaLens MatrixpLens GenUtils Algebra.Monoid.MaybeUtils.
 Require Import Coq.Structures.DecidableTypeEx List  SetoidClass PeanoNat FMapWeakList Basics Coq.Init.Specif.
 
 Module FMapNat := FMapWeakList.Make Nat_as_DT.
@@ -473,6 +473,7 @@ Section SQLSemanticsDefs.
     nth_error row colind.
 
   Existing Instance maybe_first_Monoid.
+  Existing Instance maybe_mappend_PointedFunction2.
   Definition storeProd (s1 s2 : store) : store :=
     lista_zipWith mappend s2 s1.
   

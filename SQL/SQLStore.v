@@ -1,4 +1,4 @@
-Require Import Assert Command Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Utils SetoidUtils SQL Lista GenUtils Pointed.
+Require Import Assert Command Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Tactics Algebra.SetoidCat.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Monad Algebra.Lens.Lens Utils SetoidUtils SQL Lista GenUtils Pointed Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.NatUtils.
 Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics.
 
 Module SQLStore <: Store SQLValType.

@@ -1,4 +1,4 @@
-Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad Algebra.Maybe Tactics Utils Algebra.Pointed FoldableFunctor Monoid MonoidUtils.
+Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.SetoidUtils Algebra.Monad Algebra.SetoidCat.NatUtils Algebra.SetoidCat.BoolUtils Algebra.Monoid.PropUtils Tactics Utils Algebra.Pointed FoldableFunctor Monoid.
 
 Require Import SetoidClass List Coq.Classes.RelationClasses Coq.Arith.PeanoNat Coq.Arith.Compare_dec Coq.Arith.Lt Coq.Arith.Le Basics.
 
@@ -6,23 +6,23 @@ Import ListNotations.
 
 
 Instance length_Proper A (AS : Setoid A) : Proper (equiv ==> equiv) (@length A).
-  Proof.
-    autounfold. intros. generalize H. clear H. apply list_ind_2 with (l1:=x) (l2:=y).
-    reflexivity.
-    intros. inversion H0.
-    intros. inversion H0.
-    intros. simpl. rewrite H. auto. inversion H0. auto.
-  Qed.
+Proof.
+  autounfold. intros. generalize H. clear H. apply list_ind_2 with (l1:=x) (l2:=y).
+  reflexivity.
+  intros. inversion H0.
+  intros. inversion H0.
+  intros. simpl. rewrite H. auto. inversion H0. auto.
+Qed.
 
-  Instance nth_error_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv) (@nth_error A).
-  Proof.
-    autounfold. intros. generalize H x0 y0 H0. clear H x0 y0 H0. apply list_ind_2 with (l1:=x) (l2:=y).
-    intros. rewritesr. 
-    intros. inversion H0.
-    intros. inversion H0.
-    intros. inversion H0. simpl. simpl in H1.  rewrite H1. destruct y0. simpl. auto.
-    simpl. apply H. auto. reflexivity.
-  Qed.
+Instance nth_error_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv) (@nth_error A).
+Proof.
+  autounfold. intros. generalize H x0 y0 H0. clear H x0 y0 H0. apply list_ind_2 with (l1:=x) (l2:=y).
+  intros. rewritesr. 
+  intros. inversion H0.
+  intros. inversion H0.
+  intros. inversion H0. simpl. simpl in H1.  rewrite H1. destruct y0. simpl. auto.
+  simpl. apply H. auto. reflexivity.
+Qed.
 
 Fixpoint listS_update {f fS func} {app : @Applicative f fS func} {A} {AS : Setoid A} (n:nat) (l:list A)  (t:AS ~>  fS _ AS) {struct n} :  f (list A) _ :=
   match n, l with
@@ -120,6 +120,60 @@ Definition list_zipWithS' {A : Type} {AS : Setoid A} {B : Type} {BS : Setoid B} 
 Definition nth_errorS {A : Type} {AS : Setoid A} : listS AS ~> natS ~~> maybeS AS := injF2 (@nth_error A) _.
 
 Definition nth_errorS' {A : Type} {AS : Setoid A} := flipS @ (@nth_errorS A AS).
+
+Fixpoint list_maybe_filter {A : Type} {AS : Setoid A} (p : AS ~> boolS) (l : list (maybe A)) : list A :=
+    match l with
+      | nil => nil
+      | None :: l' => list_maybe_filter p l'
+      | Some a :: l' => if p @ a then a :: list_maybe_filter p l' else list_maybe_filter p l'
+    end.
+
+Instance list_maybe_filter_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv) (@list_maybe_filter A AS).
+  Proof.
+    autounfold. intros. generalize H0. clear H0. apply list_ind_2 with (l1:=x0) (l2:=y0).
+    intros. reflexivity.
+    intros. inversion H1.
+    intros. inversion H1.
+    intros. inversion H1. simpl. matchequiv. simpl in H8. rewrites. destruct (y @ a0). constructor. auto. apply H0.  auto. apply H0. auto. apply H0. auto.
+  Qed.
+  
+Fixpoint list_maybe_filter_index {A : Type} {AS : Setoid A} n (p : AS ~> boolS) (l : list (maybe A)) : list nat :=
+    match l with
+      | nil => nil
+      | None :: l' => list_maybe_filter_index (S n) p l'
+      | Some a :: l' => if p @ a then n :: list_maybe_filter_index (S n) p l' else list_maybe_filter_index (S n) p l'
+    end.
+
+Instance list_maybe_filter_index_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv ==> equiv) (@list_maybe_filter_index A AS).
+Proof.
+    autounfold. intros. generalize H1 x y H . clear H x y H1. apply list_ind_2 with (l1:=x1) (l2:=y1).
+    intros. reflexivity.
+    intros. inversion H1.
+    intros. inversion H1.
+    intros. inversion H1. simpl. matchequiv. simpl in H9. rewrite H0, H9. destruct (y0 @ a0). constructor. auto. apply H.  auto. rewritesr. apply H. auto. rewritesr. apply H. auto. rewritesr.
+Qed.
+
+Fixpoint list_maybe_filter_index' {A : Type} {AS : Setoid A} n (p : AS ~> boolS) (l : list (maybe A)) : list (nat * A) :=
+    match l with
+      | nil => nil
+      | None :: l' => list_maybe_filter_index' (S n) p l'
+      | Some a :: l' => if p @ a then (n,a) :: list_maybe_filter_index' (S n) p l' else list_maybe_filter_index' (S n) p l'
+    end.
+
+Instance list_maybe_filter_index'_Proper A (AS : Setoid A) : Proper (equiv ==> equiv ==> equiv ==> equiv) (@list_maybe_filter_index' A AS).
+Proof.
+    autounfold. intros. generalize H1 x y H . clear H x y H1. apply list_ind_2 with (l1:=x1) (l2:=y1).
+    intros. reflexivity.
+    intros. inversion H1.
+    intros. inversion H1.
+    intros. inversion H1. simpl. matchequiv. simpl in H9. rewrite H0, H9. destruct (y0 @ a0). constructor. auto. apply H.  auto. rewritesr. apply H. auto. rewritesr. apply H. auto. rewritesr.
+Qed.
+
+Fixpoint duplicate {A} (n : nat) (a : A) : list A :=
+  match n with
+    | 0 => nil
+    | S n => a :: duplicate n a
+  end.
 
 Lemma list_zipWith'_cons : forall {A : Type} {AS : Setoid A}{B : Type} {BS : Setoid B}(a : A) (la : list A) (b: B) (lb: list B)(f : AS ~> BS ~~> AS), list_zipWith' f (a::la)(b::lb) = (f @ a @ b) :: list_zipWith' f la lb.
 
@@ -379,12 +433,6 @@ Proof.
   simpl. split. auto. apply H. auto.
 Qed.
 
-Class PointedFunction2 {A B C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {AP :Pointed A} {BP :Pointed B} {CP : Pointed C} (f : AS ~> BS ~~> CS) :=
-  {
-    pointed2 : f @ point @ point == point
-  }
-.
-
 Fixpoint lista_zipWith0_right {A : Type} {AS : Setoid A} {AP : Pointed A} {B : Type} {BS : Setoid B} {BP : Pointed B} (f : AS ~> BS ~~> AS) {pointed: PointedFunction2 f} (lb : list B) :=
   match lb with
     | [] => []
@@ -462,11 +510,6 @@ Qed.
 Definition lista_zipWithS {A : Type} {AS : Setoid A} {AP : Pointed A} {B : Type} {BS : Setoid B} {BP : Pointed B} f {poi} := injF2 (@lista_zipWith A _ _ B _ _ f poi) _.
 
 
-Class PointedFunction {A B } {AS : Setoid A} {BS : Setoid B}  {AP :Pointed A} {BP :Pointed B}  (f : AS ~> BS) :=
-  {
-    pointed : f @ point  == point
-  }
-.
 
 Definition lista_map  {A : Type} {AS : Setoid A} {AP : Pointed A}{B : Type} {BS : Setoid B} {BP : Pointed B}(f : AS ~> BS) (poi : PointedFunction f) (la : lista A) :=
   match la with
@@ -1551,7 +1594,7 @@ End Or_Monoid.
     Qed.
 
 
-        Fixpoint list_zipWith_not_proper {A B C} (f : A -> B -> C) l1 l2 :=
+    Fixpoint list_zipWith_not_proper {A B C} (f : A -> B -> C) l1 l2 :=
       match l1, l2 with
         | nil, _ => nil
         | a :: l1', nil => nil
@@ -1671,3 +1714,26 @@ Qed.
 
 Definition lista_deleteS {A} {AS : Setoid A} {AP : Pointed A} :=
   injF2 (@lista_delete A AS AP) _.
+
+Lemma lista_equiv_dec : forall {A} {AS :Setoid A} {AP : Pointed A } (r1 r2 : lista A) (equiv_dec : forall a1 a2 : A, {a1 == a2} + {~a1 == a2}),  {r1 == r2} + {~r1 == r2}.
+Proof.
+  intros. destruct r1 as [l], r2 as [l0].
+  
+  apply list_rect_2 with (l1:=l) (l2:=l0).
+      - left.  reflexivity.
+      - intros. destruct H.
+        + destruct (equiv_dec a point).
+          * left. split. auto. auto. 
+          * right. simpl. tauto.
+        + right. simpl. tauto. 
+      - intros. destruct H.
+        + destruct (equiv_dec a point).
+          * left. split. auto. simpl in e. auto.
+          * right. simpl. tauto.
+        + right. simpl in *. tauto.
+      - intros. destruct H.
+        + destruct (equiv_dec a c).
+          * left. simpl. auto. 
+          * right. simpl. tauto.
+        + right. simpl in *. tauto.
+Defined.

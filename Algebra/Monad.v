@@ -1,4 +1,4 @@
-Require Import Utils Algebra.SetoidCat Algebra.SetoidUtils Algebra.Functor Algebra.Applicative Tactics Algebra.PairUtils.
+Require Import Utils Algebra.SetoidCat Algebra.SetoidUtils Algebra.Functor Algebra.Applicative Tactics Algebra.SetoidCat.PairUtils.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 

@@ -1,4 +1,4 @@
-Require Import SetoidCat SetoidUtils Functor Monoid PairUtils Utils.
+Require Import SetoidCat SetoidUtils Functor Monoid PairUtils Utils UnitUtils.
 
 Require Import SetoidClass.
 

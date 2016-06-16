@@ -1,4 +1,5 @@
-Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed SQLUtils Lista Matrixp ListaLens MatrixpLens MonoidUtils.
+Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Tactics Algebra.SetoidCat.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed SQLUtils Lista Matrixp ListaLens MatrixpLens Algebra.SetoidCat.NatUtils Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.UnitUtils Algebra.Monoid.MonadUtils Algebra.Monoid.PropUtils.
+
 Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics Coq.Arith.Compare_dec Coq.Arith.Le Coq.Arith.Lt.
 Definition insertRow (table : nat) (h : database) : database :=
   caseMaybeS
@@ -537,7 +538,6 @@ Proof.
     - inversion H.
     - inversion H.
   Qed.
-Require Import MonadUtils.
   
   (*Lemma some_ret : forall A (AS : Setoid A) (a : A),
                      Some a == ret @ a.

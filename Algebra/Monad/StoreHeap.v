@@ -1,4 +1,4 @@
-Require Import  Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid  Algebra.Alternative Algebra.MonoidUtils Algebra.NearSemiRing  Algebra.ContT Algebra.Alternative Algebra.Functor Algebra.Applicative PairUtils SetoidUtils Tactics.
+Require Import  Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid  Algebra.Alternative Algebra.NearSemiRing  Algebra.Monad.ContT Algebra.Alternative Algebra.Functor Algebra.Applicative PairUtils SetoidUtils Tactics Algebra.SetoidCat.UnitUtils Algebra.Monoid.ArrUtils.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 

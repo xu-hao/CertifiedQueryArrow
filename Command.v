@@ -1,4 +1,4 @@
-Require Import Assert Utils Algebra.Monad Algebra.SetoidUtils Algebra.ListUtils Algebra.SetoidCat Algebra.StoreHeap Algebra.ContT Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.MonoidUtils Algebra.FoldableFunctor Algebra.PairUtils Algebra.Functor Algebra.Alternative Algebra.Maybe Algebra.Applicative Algebra.MonoidUtils.
+Require Import Assert Utils Algebra.Monad Algebra.SetoidUtils Algebra.SetoidCat.ListUtils Algebra.SetoidCat Algebra.Monad.StoreHeap Algebra.Monad.ContT Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Functor Algebra.Alternative Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Applicative Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.UnitUtils Algebra.Monoid.BoolUtils.
 
 Require Import List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
@@ -136,22 +136,7 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     simple refine (injF (fun b : bool => if b then ret @ tt else stop) _).
   Defined.
 
-  Definition andbS : boolS ~> boolS ~~> boolS.
-    simple refine (injF2 andb _).
-  Defined.
-
-  Definition negbS : boolS ~> boolS.
-    simple refine (injF negb _).
-  Defined.
-  
-  
-  Instance bool_and_Monoid : @Monoid bool boolS.
-  Proof.
-    exists (true) (andbS).
-    intros. reflexivity.
-    intros. simpl. destruct a. reflexivity. reflexivity.
-    intros. simpl. destruct a. reflexivity. reflexivity.
-  Defined.
+  Existing Instance bool_and_Monoid.
 
   Definition null_l {A} {AS : Setoid A} : H.lS _ AS ~> boolS.
     simple refine (injF (fun l => fold @ (constS _ @ false <$> l)) _).

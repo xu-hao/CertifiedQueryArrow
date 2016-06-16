@@ -1,4 +1,4 @@
-Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.ListUtils Algebra.PairUtils Algebra.Maybe Algebra.SetoidUtils Algebra.Monad Algebra.Maybe Tactics Utils Algebra.Pointed Algebra.Lens.Lista Algebra.Lens.Matrixp Lens Algebra.Monoid.
+Require Import Algebra.Functor Algebra.Applicative Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.SetoidUtils Algebra.Monad Tactics Utils Algebra.Pointed Algebra.Lens.Lista Algebra.Lens.Matrixp Lens Algebra.Monoid.
 
 Require Import SetoidClass List Coq.Classes.RelationClasses Coq.Arith.PeanoNat Coq.Arith.Compare_dec.
 

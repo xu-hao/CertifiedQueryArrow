@@ -1,82 +1,10 @@
-Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.Maybe Tactics Algebra.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.PairUtils Algebra.Maybe Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed Lista Matrixp GenUtils.
+Require Import Definitions Algebra.Monoid Expr Algebra.SetoidCat Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Tactics Algebra.SetoidCat.ListUtils Algebra.Functor Algebra.Applicative Algebra.Alternative Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Monad Algebra.Lens.Lens Algebra.Lens.MaybeLens ListLens Utils SetoidUtils SQL Pointed Lista Matrixp GenUtils Algebra.Monoid.MaybeUtils Algebra.SetoidCat.NatUtils.
 Require Import Coq.Structures.DecidableTypeEx List SetoidClass PeanoNat FMapWeakList Basics Coq.Arith.Compare_dec.
 
 Existing Instance maybe_Monad.
 Instance maybeFunctor : @Functor maybe (@maybeS) := monadFunctor.
 Instance maybe_Applicative : @Applicative maybe (@maybeS) _ := monad_Applicative.
-  
-(*  (* based on https://github.com/bacam/coqjvm/blob/master/coqjvm/ListExt.v *)
-  Fixpoint list_update {A:Type} {AS : Setoid A} (l:list A) (n:nat) (t:A -> maybe A) {struct n} : maybe (list A) :=
-  match n, l with
-    | 0,   old_v::rest => match t old_v with
-                            | None => None
-                            | Some v => Some (v::rest)
-                          end
-  | S n, v'::rest    => match list_update rest n t with None => None | Some rest' => Some (v'::rest') end
-  | _,   nil         => None
-  end.
-
-  Instance listUpdate_Proper A (AS : Setoid A): Proper (equiv ==> equiv ==> (equiv ==> equiv) ==> equiv) (@list_update A AS).
-  Proof.
-    autounfold. intros. rewrite H0.  clear x0 H0. generalize y0 H. clear H. apply list_ind_2 with (l1:=x) (l2:=y).
-    intros. induction y2.
-    simpl. auto.
-    simpl. auto.
-    intros. inversion H0.
-    intros. inversion H0.
-    intros. inversion H0. induction y2.
-    simpl. assert (x1 a == y1 c). apply H1. auto. destruct (x1 a), (y1 c). constructor. auto. auto. inversion H8. inversion H8. auto.
-    simpl. assert (list_update b y2 x1 == list_update d y2 y1). apply H. auto. destruct (list_update b y2 x1), (list_update d y2 y1). constructor. auto. auto. inversion H8. inversion H8. auto.
-  Qed.
-
-  Fixpoint list_update' {A:Type} (l:list A) (n:nat) (t:A ->  A) {struct n} :  list A :=
-  match n, l with
-    | 0,   old_v::rest => t old_v::rest
-  | S n, v'::rest    =>  v'::list_update' rest n t 
-  | _,   nil         => nil
-  end.
-
-  Instance listUpdate'_Proper A (AS : Setoid A): Proper (equiv ==> equiv ==> (equiv ==> equiv) ==> equiv) (@list_update' A).
-  Proof.
-    autounfold. intros. rewrite H0.  clear x0 H0. generalize y0 H. clear H. apply list_ind_2 with (l1:=x) (l2:=y).
-    intros. induction y2.
-    simpl. auto.
-    simpl. auto.
-    intros. inversion H0.
-    intros. inversion H0.
-    intros. inversion H0. induction y2.
-    simpl. assert (x1 a == y1 c). apply H1. auto. constructor. auto. auto. 
-    simpl. constructor. auto. apply H. auto.
-  Qed.
- *)
-
-
-(* Definition _maybe_mappend {C} {CS : Setoid C} {mon : @Monoid C CS} (a b : maybe C) : maybe C :=
-  match a with
-    | None => b
-    | Some a' => match b with
-                   | None => a
-                   | Some b' => Some (mappend @ a' @ b')
-                 end
-  end
-.
-
-Instance _maybe_mappend_Proper {C} {CS : Setoid C} {mon : @Monoid C CS} : Proper (equiv ==> equiv ==> equiv) _maybe_mappend.
-Proof.
-  autounfold. intros. unfold _maybe_mappend. matchequiv. matchequiv. simpl in *. rewritesr.  auto. auto.
-Qed.
-
-Definition maybe_mappend {C} {CS : Setoid C} {mon : @Monoid C CS}: maybeS CS ~> maybeS CS ~~> maybeS CS := injF2 _maybe_mappend _.
-      
-Instance maybe_A_Monoid {C} {CS : Setoid C} {mon : @Monoid C CS}: @Monoid (maybe C) _.
-Proof.
-  exists (None) (maybe_mappend).
-  intros. simpl. destruct a. reflexivity. auto.
-  intros. simpl. destruct a. simpl. reflexivity. simpl. auto.
-  intros. simpl. destruct a. simpl. destruct b. simpl. destruct c. rewrite associativity_monoid. reflexivity. reflexivity. destruct c. simpl. reflexivity. simpl. reflexivity. destruct b. simpl. destruct c. reflexivity. reflexivity. destruct c. simpl. reflexivity. simpl. auto.
-Defined. *)
-
-
+Existing Instance maybe_mappend_PointedFunction2.
 
 Definition unionRows : listaS (maybeS rowS) ~> listaS (maybeS rowS) ~~> listaS (maybeS rowS) :=
   lista_zipWithS maybe_first_mappend.

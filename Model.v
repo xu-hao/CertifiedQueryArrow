@@ -1,6 +1,6 @@
-Require Import Tactics Utils Algebra.SetoidUtils Algebra.SetoidCat Algebra.ListUtils Algebra.Monad Algebra.PairUtils Algebra.Maybe.
+Require Import Tactics Algebra.Utils SetoidUtils Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.Monad Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.SetoidCat.BoolUtils.
 
-Require Import FMapWeakList List RelationClasses Relation_Definitions Morphisms SetoidClass.
+Require Import FMapWeakList Coq.Lists.List RelationClasses Relation_Definitions Morphisms SetoidClass.
 
 
 Module FVarSet := FSetNat.

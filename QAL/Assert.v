@@ -1,8 +1,8 @@
 Require Import Coq.Program.Basics.
 
-Require Import Tactics Utils Algebra.SetoidUtils Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.Monad Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Expr Definitions.
+Require Import Tactics Algebra.Utils SetoidUtils Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.Monad Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Expr Definitions.
 
-Require Import FMapWeakList List RelationClasses Relation_Definitions Morphisms SetoidClass.
+Require Import FMapWeakList Coq.Lists.List RelationClasses Relation_Definitions Morphisms SetoidClass.
 
 
 Section Assert.

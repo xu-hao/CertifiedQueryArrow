@@ -1,6 +1,6 @@
-Require Import Tactics Utils Algebra.SetoidUtils Algebra.SetoidCat Algebra.Monad Algebra.SetoidCat.ListUtils Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Functor Algebra.Applicative Definitions.
+Require Import Tactics Algebra.Utils SetoidUtils Algebra.SetoidCat Algebra.Monad Algebra.SetoidCat.ListUtils Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Functor Algebra.Applicative Definitions Algebra.Functor.Monad Algebra.Applicative.Monad Algebra.Traversable.List.
 
-Require Import FMapWeakList List RelationClasses Relation_Definitions Morphisms SetoidClass.
+Require Import FMapWeakList Coq.Lists.List RelationClasses Relation_Definitions Morphisms SetoidClass.
 
 
 Section Expr.

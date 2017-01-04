@@ -1,8 +1,8 @@
-Require Import  Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.Alternative Algebra.SetoidUtils Algebra.Applicative Algebra.Functor Algebra.FoldableFunctor Algebra.Traversable Tactics.
+Require Import  Algebra.Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.Alternative SetoidUtils Algebra.Applicative Algebra.Functor Algebra.FoldableFunctor Algebra.Traversable Tactics Algebra.Monoid.Alternative Algebra.Applicative.Monad Algebra.Functor.Monad.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
-Require Import List.
+Require Import Coq.Lists.List.
 
 Open Scope type_scope.
 

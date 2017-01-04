@@ -1,5 +1,5 @@
-Require Import Utils.
-Require Import List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
+Require Import Algebra.Utils.
+Require Import Coq.Lists.List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
 
 Ltac extract_common a :=

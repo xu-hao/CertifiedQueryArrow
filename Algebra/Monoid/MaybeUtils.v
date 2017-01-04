@@ -1,4 +1,4 @@
-Require Import SetoidClass SetoidCat Algebra.SetoidCat.MaybeUtils Tactics Monoid Pointed.
+Require Import SetoidClass SetoidCat Algebra.SetoidCat.MaybeUtils Tactics Monoid Pointed Algebra.Pointed.Maybe.
 
 Section Maybe_First_Monoid.
   Definition _maybe_first_mappend {C} {CS : Setoid C}  (a b : maybe C) : maybe C :=

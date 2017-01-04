@@ -7,17 +7,6 @@ Class Pointed A : Type :=
 .
 
 
-Instance nat_Pointed : Pointed nat :=
-  {
-    point := 0
-  }.
-
-
-Instance maybe_Pointed A : Pointed (option A) :=
-  {
-    point := None
-  }.
-
 Class PointedFunction2 {A B C} {AS : Setoid A} {BS : Setoid B} {CS : Setoid C} {AP :Pointed A} {BP :Pointed B} {CP : Pointed C} (f : AS ~> BS ~~> CS) :=
   {
     pointed2 : f @ point @ point == point

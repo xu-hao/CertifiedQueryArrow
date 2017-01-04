@@ -1,8 +1,8 @@
-Require Import  Utils Algebra.SetoidCat.
+Require Import  Algebra.Utils Algebra.SetoidCat.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
-Require Import List.
+Require Import Coq.Lists.List.
 
 Open Scope type_scope.
 Section Monoid.

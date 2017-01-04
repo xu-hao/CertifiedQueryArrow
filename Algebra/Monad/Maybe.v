@@ -1,8 +1,8 @@
-Require Import Algebra.SetoidCat.PairUtils Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid Algebra.SetoidUtils Tactics Algebra.SetoidCat.MaybeUtils.
+Require Import Algebra.SetoidCat.PairUtils Algebra.Utils Algebra.SetoidCat Algebra.Monad Algebra.Monoid SetoidUtils Tactics Algebra.SetoidCat.MaybeUtils.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
-Require Import List.
+Require Import Coq.Lists.List.
 
 Open Scope type_scope.
 

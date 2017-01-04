@@ -1,4 +1,4 @@
-Require Import  Utils Algebra.SetoidCat Algebra.Monoid.
+Require Import   Algebra.SetoidCat Algebra.Monoid.
 
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 

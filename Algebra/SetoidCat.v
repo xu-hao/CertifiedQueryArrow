@@ -1,5 +1,3 @@
-Require Import  Utils.
-
 Require Import RelationClasses Relation_Definitions Morphisms SetoidClass.
 
 Open Scope type_scope.

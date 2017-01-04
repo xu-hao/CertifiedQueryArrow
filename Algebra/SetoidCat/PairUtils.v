@@ -1,6 +1,6 @@
-Require Import Utils Tactics SetoidUtils Algebra.SetoidCat.
+Require Import Algebra.Tactics Algebra.Utils SetoidUtils Algebra.SetoidCat.
 
-Require Import List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
+Require Import Coq.Lists.List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
 Open Scope type_scope.
   Definition liftPairR {A B} (RA: relation A) (RB: relation B) (ss1 ss2 : A * B) : Prop :=

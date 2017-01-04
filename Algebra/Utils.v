@@ -1,4 +1,4 @@
-Require Import List.
+Require Import Coq.Lists.List.
 Require Import Peano_dec.
 (* Require Import PeanoNat. *)
 Require Import FSetWeakList.

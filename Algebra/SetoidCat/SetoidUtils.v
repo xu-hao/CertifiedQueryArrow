@@ -1,6 +1,6 @@
-Require Import Utils Tactics SetoidCat.
+Require Import SetoidCat Algebra.Utils Algebra.Tactics.
 
-Require Import List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
+Require Import Coq.Lists.List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
 Instance equiv_equiv_Proper {A} {R : relation A} (Eq: Equivalence R) : Proper (R ==> R ==> iff) R.
 Proof.

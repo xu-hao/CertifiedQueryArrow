@@ -1,5 +1,5 @@
-Require Import Assert Command Utils.
-Require Import List PeanoNat.
+Require Import Assert Command Algebra.Utils.
+Require Import Coq.Lists.List PeanoNat.
 
 Inductive spec :=
 | partial : assertion -> command -> assertion -> spec

@@ -1,4 +1,5 @@
-Require Import SetoidCat SetoidUtils Functor Applicative FoldableFunctor Monoid.
+Require Import SetoidCat SetoidUtils Functor Applicative FoldableFunctor Monoid Algebra.Functor.Identity Algebra.Functor.Compose Algebra.Applicative.Identity Algebra.Applicative.Compose Algebra.Applicative.Transformation.
+
 Require Import SetoidClass.
 
 Section Traversable.

@@ -26,18 +26,5 @@ End Alternative.
 
 Notation "a <|> b" := (append @ a @ b) (at level 50, left associativity).
 
-Section Instances.
-  Context
-    {t : forall A, Setoid A -> Type}
-    {tS : forall A (AS : Setoid A), Setoid (t A AS)}
-    {alt : @Alternative t tS}.
-  Instance alternative_Monoid  A (AS : Setoid A) : @Monoid (t A _) (tS _ AS).
-  Proof.
-    exists (empty) (append).
-    apply left_unit_alt.
-    apply right_unit_alt.
-    apply associativity_alt.
-  Defined.
-End Instances.
 
 

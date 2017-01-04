@@ -44,6 +44,8 @@ Algebra/Monoid/MonadUtils.v
 Algebra/Monoid/ArrUtils.v
 Algebra/Monoid/MaybeUtils.v
 Algebra/Monoid/List.v
+Algebra/Monoid/NearSemiRingPlus.v
+Algebra/Monoid/NearSemiRingTimes.v
 Algebra/Monad/Maybe.v
 Algebra/Monad/ContT.v
 Algebra/Monad/StoreHeap.v
@@ -51,6 +53,8 @@ Algebra/Pointed.v
 Algebra/Pointed/Maybe.v
 Algebra/Pointed/Nat.v
 QAL/Definitions.v
+QAL/Store.v
+QAL/Heap.v
 QAL/Expr.v
 QAL/Assert.v
 QAL/Command.v

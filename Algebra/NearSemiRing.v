@@ -26,23 +26,3 @@ Section NearSemiRing.
 
 End NearSemiRing.
 
-Section Instances.
-  Context
-    {A AS}
-    (nsr : @NearSemiRing A AS).
-  
-  Instance nearSemiRing_times_Monoid : @Monoid A AS.
-  Proof.
-    exists (one) (times).
-    apply times_left_unit.
-    apply times_right_unit.
-    apply times_associativity.
-  Defined.
-  Instance nearSemiRing_plus_Monoid : @Monoid A AS.
-  Proof.
-    exists (zero) (plus).
-    apply plus_left_unit.
-    apply plus_right_unit.
-    apply plus_associativity.
-  Defined.
-End Instances.

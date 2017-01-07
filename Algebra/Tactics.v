@@ -1,7 +1,7 @@
 Require Import Algebra.Utils.
 Require Import Coq.Lists.List RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
-
+Import FSetNatNotations.
 Ltac extract_common a :=
   assert (exists t, a = t) as _H; [
     exists a; reflexivity

@@ -31,21 +31,6 @@ Module WSNotations (VT : WS).
 
 End WSNotations.
 
-Module Type PredType.
-  Parameter pred : Type.
-  Parameter predS : Setoid pred.
-End PredType.
-
-Module Type AddrType.
-  Parameter addr : Type.
-  Parameter addrS : Setoid addr.
-End AddrType.
-
-Module Type TypeType.
-  Parameter type : Type. 
-  Parameter typeS : Setoid type.
-End TypeType.
-
 Module Type ValType.
   Parameter val : Type.
   Parameter valS : Setoid val.
@@ -53,5 +38,3 @@ Module Type ValType.
   Parameter appVal : valS ~> valS ~~> maybeS valS.
   Axiom equiv_dec : forall val1 val2, {val1 == val2} + {~ val1 == val2}.
 End ValType.
-
-

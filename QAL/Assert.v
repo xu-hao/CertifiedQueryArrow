@@ -1,20 +1,17 @@
 Require Import Coq.Program.Basics.
 
-Require Import Tactics Algebra.Utils SetoidUtils Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.Monad Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Expr Definitions QAL.Store QAL.Heap.
+Require Import Tactics Algebra.Utils SetoidUtils Algebra.SetoidCat Algebra.SetoidCat.ListUtils Algebra.Monad Algebra.SetoidCat.PairUtils Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe QAL.Definitions QAL.Command QAL.AbstractHeap QAL.AbstractStore.
 
 Require Import FMapWeakList Coq.Lists.List RelationClasses Relation_Definitions Morphisms SetoidClass.
 
 
 Section Assert.
   Context
-    {pred : Type}
     {builtin : Type}.
-
-  Definition expr := @expr builtin.
 
   Inductive assertion :=
   | emp : assertion
-  | singleton : expr -> pred -> expr -> assertion
+  | primitive : builtin -> assertion
   | sepConj : assertion -> assertion -> assertion
   | sepImp : assertion -> assertion -> assertion
   | atrue : assertion
@@ -28,37 +25,37 @@ Section Assert.
 
 End Assert.
 
-  Notation "a & b" := (aAnd a b) (left associativity, at level 81).
-  Notation "! a" := (aNot a) (at level 80).
-  Notation "[[ addr , p ]] ⟼ val" := (singleton addr p val) (at level 79).
-  Notation "a ∗ b" := (sepConj a b) (left associativity, at level 82).
-  Notation "a -∗ b" := (sepImp a b) (right associativity, at level 83).
-  Notation "'aexists' v , a" := (aExists v a) (at level 85).
+  Notation "a ∧ b" := (aAnd a b) (left associativity, at level 81).
+  Notation "¬ a" := (aNot a) (at level 80).
+(*  Notation "[[ addr , p ]] ⟼ val" := (singleton addr p val) (at level 79). *)
+  Notation "a ∗ b" := (sepConj a b) (left associativity, at level 83).
+  Notation "a -∗ b" := (sepImp a b) (right associativity, at level 84).
+  Notation "∃ v , a" := (aExists v a) (at level 85).
+  Notation "⊤" := (atrue) (at level 85).
+
+  Module Type PrimitiveAssertion (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
+    Parameter primitiveAssertion : Type.
+    Parameter primitiveAssertionS : Setoid primitiveAssertion.
+    Parameter interpretPrimitiveAssertion : primitiveAssertionS ~> S.tS ~~> H.tS ~~> iff_setoid.
+  End PrimitiveAssertion.
   
-  Module AssertModel (TT: TypeType ) (AT : AddrType ) (PT : PredType) (VT : ValType)  (S : Store VT) (H : Heap TT AT PT VT) (B: BuiltInExpr VT S).
-  Module EM := ExprModel VT S B.
-  Module HU := HeapUtils TT AT PT VT H.
-  Import TT AT PT VT EM S H B HU.
-  Definition assertion := @assertion pred builtInExpr.
-  Instance assertionS : Setoid assertion := @assertionS pred builtInExpr.
+  Module AssertModel  (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap) (PA: PrimitiveAssertion VT S H).
+  Import S H PA.
+  Definition assertion := @assertion primitiveAssertion.
+  Instance assertionS : Setoid assertion := @assertionS primitiveAssertion.
 
   Fixpoint _models (a : assertion) (s : S.t) (h : H.t) {struct a} : Prop :=
     match a with
-      | emp => ~exists a, inDom @ a @ h
-      | [[ expr , pred ]] ⟼ expr2 =>
-        exists val val2 addr1,
-        ⟦ expr ⟧expr s == Some val /\
-        extractAddr @ val == Some addr1 /\                             
-        ⟦ expr2 ⟧expr s == Some val2 /\
-        singleton @ addr1 @ pred @ val2 @ h
+      | emp => isEmpty @ h
+      | primitive pa => interpretPrimitiveAssertion @ pa @ s @ h
       | a0 ∗ a1 => exists h0 h1,
                      h0 ⊥ h1 /\ h0 ⋅ h1 == h /\ _models a0 s h0  /\ _models a1 s h1
       | a0 -∗ a1 => forall h',
                       h ⊥ h' -> _models a0 s h' -> _models a1 s (h ⋅ h') 
-      | ! a => ~ _models a s h
-      | a0 & a1 => _models a0 s h /\ _models a1 s h
-      | atrue => True
-      | aexists v, a => exists val, _models a (S.update @ v @ val @ s) h
+      | ¬ a => ~ _models a s h
+      | a0 ∧ a1 => _models a0 s h /\ _models a1 s h
+      | ⊤ => True
+      | ∃ v, a => exists val, _models a (S.update @ v @ val @ s) h
     end.
 
   Definition models : assertionS ~> S.tS ~~> H.tS ~~> iff_setoid.
@@ -66,12 +63,8 @@ End Assert.
     Lemma models_1 : Proper (equiv ==> equiv ==> equiv ==> equiv) _models.
     Proof.
       autounfold. intros x y H. rewrite H. clear x H. induction y.
-      intros. simpl.  split.
-      intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. unfold maybe_equiv in *. transitivity v0. auto. auto. auto.
-      intros. intro. apply H1. destruct H2. destruct H2.  destruct H2. exists x1. exists x2. exists x3. equiv (x0 [x1, x2]) ( y0 [x1, x2]). simpl in H3. unfold maybe_equiv in *. transitivity v. symmetry. auto. auto. auto.
-      intros. unfold _models. split.
-      intro. destruct H1 as [x1 [x2 [x3 ? ] ] ]. exists x1. exists x2. exists x3. rewrite <- H. rewrite <- H0. tauto. 
-      intro. destruct H1 as [x1 [x2 [x3 ? ] ] ]. exists x1. exists x2. exists x3. rewrite H. rewrite H0. tauto. 
+      intros. unfold _models.  rewritesr. 
+      intros. unfold _models. rewritesr.
       intros. simpl. split.
       intros. destruct H1. destruct H1. exists x1. exists x2. rewrite <- (IHy1 x y H x1 x1 (reflexivity x1)) , <- (IHy2 x y H x2 x2 (reflexivity x2)). rewrite <- H0. auto. 
       intros. destruct H1. destruct H1. exists x1. exists x2. rewrite (IHy1 x y H x1 x1 (reflexivity x1)) , (IHy2 x y H x2 x2 (reflexivity x2)). rewrite H0. auto. 

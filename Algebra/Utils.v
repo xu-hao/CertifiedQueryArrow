@@ -7,12 +7,14 @@ Require Import Coq.Structures.DecidableTypeEx.
 
 Module FSetNat := FSetWeakList.Make Nat_as_DT.
 
-Notation "∅" := FSetNat.empty.
-Notation "a ∩ b" := (FSetNat.inter a b) (at level 11, left associativity).
-Notation "a ∪ b" := (FSetNat.union a b) (at level 12, left associativity).
-Notation "﹛ a ﹜" := (FSetNat.singleton a) (at level 10).
-Notation "a ∈ b" := (FSetNat.In a b) (at level 15).
-Notation "a ∈? b" := (FSetNat.mem a b) (at level 15).
+Module FSetNatNotations.
+       Notation "∅" := FSetNat.empty.
+       Notation "a ∩ b" := (FSetNat.inter a b) (at level 11, left associativity).
+       Notation "a ∪ b" := (FSetNat.union a b) (at level 12, left associativity).
+       Notation "﹛ a ﹜" := (FSetNat.singleton a) (at level 10).
+       Notation "a ∈ b" := (FSetNat.In a b) (at level 15).
+       Notation "a ∈? b" := (FSetNat.mem a b) (at level 15).
+End FSetNatNotations.
 
   Lemma and_app : forall l l2, fold_right and True (l ++ l2) <-> (fold_right and True l /\ fold_right and True l2). 
   Proof.

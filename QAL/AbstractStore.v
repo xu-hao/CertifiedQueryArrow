@@ -9,6 +9,10 @@ Module Type AbstractStore (VT : ValType).
   Parameter t : Type.
   Parameter tS : Setoid t.
   Parameter update : varS ~> VT.valS ~~> tS ~~> tS.
+  Parameter read : varS ~> tS ~~> maybeS VT.valS.
+  Parameter empty : t.
+
+  Notation "store [ var ]s " := (read @ var @ store) (at level 11).
   Notation "store [ var ↦ val ]s " := (update @ var @ val @ store) (at level 11).
 End AbstractStore.
 

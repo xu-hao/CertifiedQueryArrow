@@ -38,3 +38,9 @@ Module Type ValType.
   Parameter appVal : valS ~> valS ~~> maybeS valS.
   Axiom equiv_dec : forall val1 val2, {val1 == val2} + {~ val1 == val2}.
 End ValType.
+
+Module Type PredType.
+  Parameter pred : Type.
+  Parameter predS : Setoid pred.
+End PredType.
+

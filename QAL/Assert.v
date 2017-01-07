@@ -33,13 +33,13 @@ End Assert.
   Notation "∃ v , a" := (aExists v a) (at level 85).
   Notation "⊤" := (atrue) (at level 85).
 
-  Module Type PrimitiveAssertion (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
+  Module Type PrimitiveAssertion (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT).
     Parameter primitiveAssertion : Type.
     Parameter primitiveAssertionS : Setoid primitiveAssertion.
     Parameter interpretPrimitiveAssertion : primitiveAssertionS ~> S.tS ~~> H.tS ~~> iff_setoid.
   End PrimitiveAssertion.
   
-  Module AssertModel  (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap) (PA: PrimitiveAssertion VT S H).
+  Module AssertModel  (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT) (PA: PrimitiveAssertion PT VT S H).
   Import S H PA.
   Definition assertion := @assertion primitiveAssertion.
   Instance assertionS : Setoid assertion := @assertionS primitiveAssertion.

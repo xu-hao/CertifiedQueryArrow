@@ -3,26 +3,22 @@ Require Import QAL.Assert Algebra.Utils Algebra.Monad SetoidUtils Algebra.Setoid
 Require Import Coq.Lists.List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
 Section Aggregator.
-  Context
-    {type : Type}
-    {pred : Type}
-    {builtInExpr : Type}
-    {builtInCommand : Type}.
 
   Inductive qalAggregator :=
   | cExists : qalAggregator
   | cNot : qalAggregator
+  | cReturn : list var -> qalAggregator
   .
 
   Program Instance qalAggregatorS : Setoid qalAggregator.
 
 End Aggregator.
 
-Module QALAggregator (VT : ValType)
-       (S : AbstractStore VT) (H : AbstractHeap) : Aggregator VT S H.
+Module QALAggregator (PT : PredType) (VT : ValType)
+       (S : AbstractStore VT) (H : AbstractHeap PT VT) : Aggregator PT VT S H.
   Open Scope type_scope.
-  Module TS := Types VT S H.
-  Module CA := CommandAux VT S H.
+  Module TS := Types PT VT S H.
+  Module CA := CommandAux PT VT S H.
   Import VT S H TS CA.
 
   Definition aggregator := qalAggregator.
@@ -32,6 +28,7 @@ Module QALAggregator (VT : ValType)
     match agg with
       | cNot  => fv
       | cExists  => fv
+      | cReturn _ => fv 
     end
   .
 
@@ -40,6 +37,7 @@ Module QALAggregator (VT : ValType)
     unfold Proper, respectful. intros. simpl in H. rewrite H. destruct y.
     * simpl. auto.  
     * simpl. auto. 
+    * simpl. auto.
   Qed.
 
   Definition freeVarsAggregator := injF2 _freeVarsAggregator _.
@@ -67,23 +65,53 @@ Module QALAggregator (VT : ValType)
     solve_properS existentialQuantificationGeneric.
   Qed.
 
-  
+  Section ReturnGeneric.
+    Context
+      (vl : list var)
+      (a : H.l S.t _).
+    Definition _narrowStore (vl : list var) (s : S.t) : S.t :=
+      fold_right (fun v s2 => match s [ v ]s with
+                               | None => s2
+                               | Some val => S.update @ v @ val @ s2
+                            end) S.empty vl.
 
-Fixpoint _interpretAggregator (agg : aggregator) (a : H.l S.t _)  : state unit :=
+    Instance _narrowStore_Proper : Proper (equiv ==> equiv ==> equiv) _narrowStore.
+    Proof.
+      unfold Proper, respectful. intros. generalize H  x0 y0 H0 . clear H x0 y0 H0.
+      apply list_ind_2 with (l1:=x) (l2:=y).
+      - intros. simpl. reflexivity.
+      - intros. inversion H0.
+      - intros. inversion H0.
+      - intros. inversion H0.
+        simpl. matchequiv. evalproper. simpl in H8. rewritesr. apply H.  auto.  auto. apply H. auto. auto.
+    Qed.
+
+    Definition narrowStore := injF2 _narrowStore _.
+
+    Definition returnGeneric : state unit :=
+      branchStore @ (narrowStore @ vl <$> a).
+  End ReturnGeneric.
+  Instance returnGeneric_Proper : Proper (equiv ==> equiv ==> equiv) returnGeneric.
+  Proof.
+    solve_properS returnGeneric.
+  Qed.
+ 
+
+  Fixpoint _interpretAggregator (agg : aggregator) (a : H.l S.t _)  : state unit :=
     match agg with
       | cNot =>
         negationGeneric a
       | cExists =>
         existentialQuantificationGeneric a
+      | cReturn vl => returnGeneric vl a
     end
   .
-
-
 
   Instance _interpretAggregator_Proper : Proper (equiv ==> equiv ==> equiv) _interpretAggregator.
   Proof.
     unfold Proper, respectful. intros. simpl in H. rewrite H. destruct y.
     * simpl. arrequiv. 
+    * simpl. arrequiv.
     * simpl. arrequiv.
   Qed.
 

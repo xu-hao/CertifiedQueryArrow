@@ -29,15 +29,15 @@ Notation "¬ a" := (cNot a) (at level 80). *)
 Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
 Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
 
-Module Types (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
+Module Types (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT).
   Definition state A {AS : Setoid A} : Type := @sh _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
 
   Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @shS _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
   Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad.
 End Types.
 
-Module Type PrimitiveCommand (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
-  Module TS := Types VT S H.
+Module Type PrimitiveCommand (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT).
+  Module TS := Types PT VT S H.
   Import TS.
   Parameter primitiveCommand : Type.
   Parameter primitiveCommandS : Setoid primitiveCommand.
@@ -45,8 +45,8 @@ Module Type PrimitiveCommand (VT : ValType) (S : AbstractStore VT) (H : Abstract
   Parameter interpretPrimitiveCommand : primitiveCommandS ~> stateS unitS.
 End PrimitiveCommand.
 
-Module Type Aggregator (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
-  Module TS := Types VT S H.
+Module Type Aggregator (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT).
+  Module TS := Types PT VT S H.
   Import TS.
   Parameter aggregator : Type.
   Parameter aggregatorS : Setoid aggregator.
@@ -55,9 +55,9 @@ Module Type Aggregator (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
 End Aggregator.
 
 
-Module CommandAux (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
+Module CommandAux (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT).
   Open Scope type_scope.
-  Module TS := Types VT S H.
+  Module TS := Types PT VT S H.
   Import S H TS.
 
   Definition stateStoreHeapS := @storeHeapS _ H.tS _ S.tS _ (lS) _ unitS.
@@ -166,6 +166,9 @@ Module CommandAux (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
   Definition branchStore : H.lS _ S.tS ~> stateS unitS :=
     choice ∘ (fmap @ putStore).
 
+  Definition branchVal {A} {AS : Setoid A} : H.lS _ AS ~> stateS AS :=
+    choice ∘ (fmap @ ret).
+
   (* we define a run function that retrives all stores *)
   Definition _retCont : S.tS ~> H.lS _ (S.tS ~*~ unitS).
     simple refine (injF (fun (s' : S.t) => pure @ (s', tt) : H.l (S.t * unit) (S.tS ~*~ unitS)) _).
@@ -220,11 +223,11 @@ Module CommandAux (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap).
 End CommandAux.
 
 Import FSetNatNotations.
-Module CommandModel (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap) 
-       (PC : PrimitiveCommand VT S H) (AGG: Aggregator VT S H).
+Module CommandModel (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT) 
+       (PC : PrimitiveCommand PT VT S H) (AGG: Aggregator PT VT S H).
   Open Scope type_scope.
-  Module TS := Types VT S H.
-  Module CA := CommandAux VT S H.
+  Module TS := Types PT VT S H.
+  Module CA := CommandAux PT VT S H.
   Import S H PC AGG TS CA.
 
   Definition command := @command primitiveCommand aggregator.
@@ -299,9 +302,9 @@ Fixpoint _reduce (comm : command)  : state unit :=
 End CommandModel.
 
 Module SemanticEquivalence 
-       (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap)
-       (PC : PrimitiveCommand VT S H) (AGG : Aggregator VT S H).
-  Module CM := CommandModel VT S H PC AGG.
+       (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT)
+       (PC : PrimitiveCommand PT VT S H) (AGG : Aggregator PT VT S H).
+  Module CM := CommandModel PT VT S H PC AGG.
   Import S H PC AGG CM.
   Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
   

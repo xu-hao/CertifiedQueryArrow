@@ -5,11 +5,6 @@ Require Import FMapWeakList  RelationClasses Relation_Definitions Morphisms Seto
 
 Require Import Coq.Structures.DecidableTypeEx.
 
-Module Type PredType.
-  Parameter pred : Type.
-  Parameter predS : Setoid pred.
-End PredType.
-
 Module Type AddrType.
   Parameter addr : Type.
   Parameter addrS : Setoid addr.

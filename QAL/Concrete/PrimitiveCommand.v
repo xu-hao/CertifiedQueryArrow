@@ -1,208 +1,128 @@
-Require Import Assert Algebra.Utils Algebra.Monad SetoidUtils Algebra.SetoidCat.ListUtils Algebra.SetoidCat Algebra.Monad.StoreHeap Algebra.Monad.ContT Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Functor Algebra.Alternative Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Applicative Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.UnitUtils Algebra.Monoid.BoolUtils Algebra.Monoid.Alternative Algebra.Alternative.List Algebra.Functor.List Algebra.FoldableFunctor.List Algebra.Monad.Utils.
+Require Import QAL.Assert Algebra.Utils Algebra.Monad SetoidUtils Algebra.SetoidCat.ListUtils Algebra.SetoidCat Algebra.Monad.StoreHeap Algebra.Monad.ContT Algebra.NearSemiRing Algebra.Monoid Tactics QAL.Definitions Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Functor Algebra.Alternative Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Applicative Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.UnitUtils Algebra.Monoid.BoolUtils Algebra.Monoid.Alternative Algebra.Alternative.List Algebra.Functor.List Algebra.FoldableFunctor.List Algebra.Monad.Utils QAL.Concrete.Definitions QAL.AbstractStore QAL.AbstractHeap QAL.Command Algebra.Traversable.List Algebra.Functor.Monad Algebra.Applicative.Monad.
 
 Require Import Coq.Lists.List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
 Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A ) := times @ a @ b == times @ b @ a.
 
-Section Command.
+Section PrimitiveCommand.
   Context
-    {type : Type}
+    {literal : Type}
     {pred : Type}
-    {builtInExpr : Type}
-    {builtInCommand : Type}.
-
-  Definition expr := @expr builtInExpr. 
+  .
   
-  Inductive command :=
-  | cNewAddr : var -> type -> command
-  | cFilter : expr -> pred -> expr -> command
-  | cBuiltIn : builtInCommand -> command
-  | cLookupBySubject : expr -> pred -> var -> command
-  | cLookupByObject : var -> pred -> expr -> command
-  | cLookupByPred : var -> pred -> var -> command
-  | cMutate : expr -> pred -> expr -> command
-  | cDelete : expr -> command
-  | cSeq : command -> command -> command
-  | cChoice : command -> command -> command
-  | cOne : command
-  | cZero : command
-  | cClearVar : var -> command
-  | cExists : command -> command
-  | cNot : command -> command
+  Inductive term :=
+  | termVar : var -> term
+  | termVal : literal -> term
   .
 
-  Program Instance commandS : Setoid command.
+  Program Instance termS : Setoid term.
 
-End Command.
+  Import FSetNatNotations. 
 
-Notation "𝟏" := (cOne) (at level 82).
-Notation "𝟎" := (cZero) (at level 82).
-Notation "∃ b" := (cExists b) (at level 83).
-Notation "¬ a" := (cNot a) (at level 80).
-Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
-Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
+  Definition _termFreeVars (t : term) : FVarSet.t :=
+    match t with
+        | termVal _ => ∅
+        | termVar v => ﹛ v ﹜ 
+    end
+  .
+  
+  Instance _termFreeVars_Proper : Proper (equiv ==> equiv) _termFreeVars.
+  Proof.
+    solve_proper.
+  Qed.
 
+  Definition termFreeVars := injF _termFreeVars _.
 
-Module Types (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
-  Definition state A {AS : Setoid A} : Type := @sh _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
+  Inductive qalPrimitiveCommand :=
+  | pcInsert : pred -> list term -> qalPrimitiveCommand
+  | pcDelete : pred -> list term -> qalPrimitiveCommand
+  | pcAtomic : pred -> list term -> qalPrimitiveCommand
+  .
 
-  Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @shS _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
-  Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad.
-End Types.
+  Program Instance qalPrimitiveCommandS : Setoid qalPrimitiveCommand.
 
-Module Type BuiltInCommand (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
-  Import TT AT PT VT.
-  Module TS := Types TT AT PT VT S H.
-  Import TS.
-  Parameter builtInCommand : Type.
-  Parameter builtInCommandS : Setoid builtInCommand.
-  Parameter freeVarsBuiltInCommand : builtInCommandS ~> varSetS.
-  Parameter interpretBuiltInCommand : builtInCommandS ~> stateS unitS.
-End BuiltInCommand.
+  Definition tlFreeVars (tl : list term) :=
+            fold_right (fun t  fv =>
+                      (termFreeVars @ t) ∪ fv) ∅ tl
+  .
 
-Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
-       (S : Store VT) (H : Heap TT AT PT VT) (B : BuiltInExpr VT S)
-       (BIC : BuiltInCommand TT AT PT VT S H).
+  Definition _qalPrimitiveCommandFreeVars (pc : qalPrimitiveCommand) : FVarSet.t :=
+    match pc with
+      | pcInsert _ tl => tlFreeVars tl
+      | pcDelete _ tl => tlFreeVars tl
+      | pcAtomic _ tl => tlFreeVars tl
+    end
+  .
+  
+  Instance _qalPrimitiveCommandFreeVars_Proper : Proper (equiv ==> equiv) _qalPrimitiveCommandFreeVars.
+   Proof.
+    solve_proper.
+  Qed.
+
+  Definition qalPrimitiveCommandFreeVars := injF _qalPrimitiveCommandFreeVars _.
+  
+End PrimitiveCommand.
+
+Module Type Literal (VT : ValType).
+  Import VT.
+  Parameter literal : Type.
+  Parameter literalS : Setoid literal.
+  Parameter interpretLiteral : literalS ~> valS.
+End Literal.
+
+Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
+       (L : Literal VT) (S : AbstractStore VT) (H : AbstractHeap PT VT) : PrimitiveCommand PT VT S H.
   Open Scope type_scope.
-  Module EM := ExprModel VT S B.
-  Module HU := HeapUtils TT AT PT VT H.
-  Module TS := Types TT AT PT VT S H.
-  Import TT AT PT VT EM S H HU B BIC TS.
-  Definition command := @command type pred builtInExpr builtInCommand.
-  Instance commandS : Setoid command := @commandS type pred builtInExpr builtInCommand.
-      
-  Fixpoint cFreeVars (comm : command) :=
-    match comm with
-      | cNewAddr var type  => ﹛ var ﹜
-      | cFilter expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-      | cBuiltIn builtin => freeVarsBuiltInCommand @ builtin
-      | cLookupBySubject expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
-      | cLookupByObject var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
-      | cLookupByPred var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
-      | cMutate expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-      | cDelete expr => exprFreeVars expr
-      | cSeq comm comm2 => cFreeVars comm ∪ cFreeVars comm2
-      | cChoice comm comm2 => cFreeVars comm ∪ cFreeVars comm2
-      | cOne => ∅
-      | cZero => ∅
-      | cNot form => cFreeVars form
-      | cClearVar v => ﹛ v ﹜
-      | cExists form => cFreeVars form
+  Module TS := Types PT VT S H.
+  Module CA := CommandAux PT VT S H.
+  Import PT VT L S H TS CA.
+
+  Definition freeVarsPrimitiveCommand := @qalPrimitiveCommandFreeVars literal pred.
+
+  Definition qalTerm := @term literal.
+  Instance qalTermS : Setoid qalTerm := @termS literal.
+
+  Instance argumentVal_Proper : Proper (equiv ==> equiv) (argumentVal val).
+  Proof.
+    unfold Proper, respectful. intros. auto. 
+  Qed.
+  
+  Definition argumentValS := injF (argumentVal val) _.
+  Definition _evalTerm (t : term) : state (argument val) :=
+    match t with
+      | termVal l => ret @ (argumentValS @ (interpretLiteral @ l))
+      | termVar v => getStore >>= ret ∘ (caseMaybeS @ argumentValS @ argumentVar val v) ∘ (S.read @ v)  
     end
   .
 
+  Instance _evalTerm_Proper : Proper (equiv ==> equiv) _evalTerm.
+  Proof.
+    solve_proper.
+  Qed.
 
-  Definition stateStoreHeapS := @storeHeapS _ H.tS _ S.tS _ (lS) _ unitS.
+  Definition evalTerm := injF _evalTerm _.
 
-  Definition runState {A B} {AS : Setoid A} {BS : Setoid B} : stateS AS ~> (AS ~~> stateStoreHeapS) ~~> stateStoreHeapS := runSh. 
+  Existing Instance sh_Monad.
+  Existing Instance monadFunctor.
+  Existing Instance monad_Applicative.
+  Definition evalTermList : listS (@termS literal) ~> stateS (listS (argumentS _ valS)) := mapM @ evalTerm.
 
-  Existing Instance alternative_Monoid.
-  Existing Instance list_Alternative.
-  Existing Instance sh_Alternative.
-  Existing Instance listFunctor.
-  Existing Instance list_Foldable.
+  Definition _evalTermVal (t : term) : state ( val) :=
+    match t with
+      | termVal l => ret @ (interpretLiteral @ l)
+      | termVar v => getStore >>= ret ∘ (S.read @ v) >>= stopNone  
+    end
+  .
 
-  Definition stop {A} {AS : Setoid A}: state A := mempty.
+  Instance _evalTermVal_Proper : Proper (equiv ==> equiv) _evalTermVal.
+  Proof.
+    solve_proper.
+  Qed.
 
-  Definition choice {A} {AS : Setoid A}: H.lS _ (stateS AS) ~> stateS AS := fold.
+  Definition evalTermVal := injF _evalTermVal _.
 
-(*  Existing Instance sh_Monad.
-  Existing Instance store_Monad.*)
+  Definition evalTermListVal : listS (@termS literal) ~> stateS (listS valS) := mapM @ evalTermVal.
 
-  Definition stopNone {A} {AS : Setoid A} :
-    optionS AS ~> stateS AS.
-    simple refine (injF (fun (a : option A) =>
-                     match a with
-                       | Some a' => ret @ a'
-                       | None => stop
-                     end) _).
-    exact (@stateS).
-    exact state_Monad.
-    Lemma stopNone_1 : forall {A} {AS : Setoid A}, @Proper (option A -> @state A AS)
-     (equiv  ==>
-      equiv )
-     (fun a : option A =>
-      match a with
-      | Some a' => ret @ a'
-      | None => stop
-      end).
-    Proof.
-      autounfold. intros. matchequiv. simpl in H. rewritesr.
-    Qed.
-    apply stopNone_1.
-  Defined.
-  
-  Definition stopFalse : boolS ~> stateS unitS.
-    simple refine (injF (fun b : bool => if b then ret @ tt else stop) _).
-  Defined.
-
-  Existing Instance bool_and_Monoid.
-
-  Definition null_l {A} {AS : Setoid A} : H.lS _ AS ~> boolS.
-    simple refine (injF (fun l => fold @ (constS _ @ false <$> l)) _).
-    exact boolS.
-    apply H.lS.
-    exact H.func.
-    exact H.foldable.
-    exact bool_and_Monoid.
-    apply H.lS.
-    exact H.func.
-    Lemma null_l_1 : forall A AS, Proper (equiv ==> equiv)
-     (fun l0 : l A AS =>
-      fold @
-            (constS _ @ false <$> l0)).
-    Proof.
-      intros. solve_proper.
-    Qed.
-    apply null_l_1.
-  Defined.
-
-  Definition notNull_l {A} {AS : Setoid A} : H.lS _ AS ~> boolS := negbS ∘ null_l .
-
-  Definition stopNotNull {A} {AS : Setoid A} : H.lS _ AS ~> stateS unitS.
-    simple refine (injF (fun l => if null_l @ l then ret @ tt else stop) _).
-    intros. apply stateS.
-    exact state_Monad.
-    Lemma stopNotNull_1 : forall A AS, @Proper (l A AS -> @state unit unitS)
-     (@equiv (l A AS) (lS A AS) ==>
-      @equiv (@state unit unitS) (@stateS unit unitS))
-     (fun l0 : l A AS =>
-      if @null_l A AS @ l0
-      then
-       @ret state (fun (A0 : Type) (AS0 : Setoid A0) => @stateS A0 AS0)
-         state_Monad unit unitS @ tt
-      else @stop unit unitS).
-    Proof.
-      intros. solve_proper.
-    Qed.
-    apply stopNotNull_1.
-  Defined.
-
-  Definition stopNull {A} {AS : Setoid A} : H.lS _ AS ~> stateS unitS.
-    simple refine (injF (fun l => if notNull_l @ l then ret @ tt else stop) _).
-    intros. apply stateS.
-    exact state_Monad.
-    Lemma stopNull_1 : forall A AS, Proper (equiv ==> equiv)
-     (fun l0 : l A AS =>
-      if notNull_l @ l0
-      then
-       @ret state (fun (A0 : Type) (AS0 : Setoid A0) => @stateS A0 AS0)
-         state_Monad unit unitS @ tt
-      else @stop unit unitS).
-    Proof.
-      intros. solve_proper.
-    Qed.
-    apply stopNull_1.
-  Defined.
-
-  Definition evalExpr : exprS ~> stateS valS.
-    simple refine (injF (fun expr1 => 
-                           (exprEval
-                             <$> getStore
-                             <*> pure @ expr1) >>= stopNone) _).
-  Defined.
-
-  Existing Instance valS.
   (* update var in store *)
   Definition updateVar (var1 : var) : valS ~> stateS unitS.
     refine (injF (fun val1 =>  
@@ -230,7 +150,7 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     apply updateVar2_1.    
   Defined.
   
-  Definition branch (var1 : var) : H.lS _ addrS ~> stateS unitS :=
+(*  Definition branch (var1 : var) : H.lS _ addrS ~> stateS unitS :=
     choice ∘ fmap @ (updateVar var1 ∘ addrToVal) .
   
   Definition branch2 (var1 var2 : var) : H.lS _ (addrS ~*~ valS) ~> stateS unitS.
@@ -244,328 +164,90 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     Qed.
     apply branch2_1.
   Defined.
+  *)
+
+
+  Definition updateStore : listS (varS ~*~ valS) ~> S.tS ~~> S.tS :=
+    flipS @ (fold_rightS @ (uncurryS @ S.update)).
   
-  Definition branchStore : H.lS _ S.tS ~> stateS unitS :=
-    choice ∘ (fmap @ putStore).
+  Definition _unionWithCurrStore (s : list (var * val)) : state unit :=
+    updateStore @ s <$> getStore >>= putStore.
 
-  (* we define a run function that retrives all stores *)
-  Definition _retCont : S.tS ~> H.lS _ (S.tS ~*~ unitS).
-    simple refine (injF (fun (s' : S.t) => pure @ (s', tt) : H.l (S.t * unit) (S.tS ~*~ unitS)) _).
-    apply H.lS.
-    apply H.func.
-    apply H.app.
-    Lemma _retCont_1 : @Proper (S.t -> l (S.t * unit) (S.tS ~*~ unitS))
-     (@equiv S.t S.tS ==>
-      @equiv (l (S.t * unit) (S.tS ~*~ unitS))
-        (lS (S.t * unit) (S.tS ~*~ unitS)))
-     (fun s' : S.t =>
-      @pure l lS func app (S.t * unit) (S.tS ~*~ unitS) @ (s', tt)
-      :
-        l (S.t * unit) (S.tS ~*~ unitS)).
-    Proof.
-      solve_proper.
-    Qed.
-    apply _retCont_1.
-  Defined.
-  
-  Definition retCont : unitS ~> stateStoreHeapS :=
-    constS unitS @ (curryS @ (idS *** _retCont)).
-
- 
- Unset Printing Implicit.
-
-  Definition extractStores : stateS unitS ~> H.tS ~~> S.tS ~~> H.tS ~*~ H.lS _ S.tS.
-    simple refine (injF3 (fun a h s => (idS *** fmap @ fstS) @ (runSh @ a @ retCont @ h @ s)) _).
-    apply H.tS.
-    apply H.lS.
-    apply H.func.
-    Lemma extractStores_1 : Proper (equiv ==> equiv ==> equiv ==> equiv)
-     (fun (a : (unitS ~~> storeHeapS unitS) ~> storeHeapS unitS) 
-        (h : t) (s : S.t) =>
-      (idS *** fmap @ fstS) @ (runSh @ a @ retCont @ h @ s)).
-    Proof.
-      solve_proper.
-    Qed.
-    apply extractStores_1.
-  Defined.
-  
-  Definition run : stateS unitS  ~> stateS (H.lS _ S.tS).
-    simple refine (injF4 (fun (a : state unit) (c : H.lS _ S.tS ~> stateStoreHeapS) (h : H.t) (s : S.t) => let (h', r) := (extractStores @ a @ h @ s) in c @ r @ h' @ s) _).
-    Lemma run_1 : Proper (equiv ==> equiv ==> equiv ==> equiv ==> equiv)
-     (fun (a : state unit) (c : lS S.t S.tS ~> stateStoreHeapS) 
-        (h : t) (s : S.t) =>
-      let (h', r) := extractStores @ a @ h @ s in c @ r @ h' @ s).
-    Proof.
-      repeat autounfold. intros. simpl_let. simpl_let. rewritesr. 
-    Qed.
-    apply run_1.
-  Defined.
-
-
-  Section LookupBySPOGeneric.
-    Context (expr1 : expr) (pred1 : pred) (expr2 :expr).
-
-    Definition lookupBySPOGeneric  : state unit :=
-      (lookupBySPO
-        <$> ((extractAddr <$> evalExpr @ expr1) >>= stopNone)
-        <*> pure @ pred1
-        <*> evalExpr @ expr2
-        <*> getHeap) >>= stopFalse.
-  End LookupBySPOGeneric.
-
-  
-  Instance lookupBySPOGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySPOGeneric.
+  Instance _unionWithCurrStore_Proper : Proper (equiv ==> equiv) _unionWithCurrStore.
   Proof.
-    solve_properS lookupBySPOGeneric.
+    solve_properS _unionWithCurrStore.
   Qed.
   
-  
-  
-  Section LookupBySubjectGeneric.
-    Context
-      (expr1 : expr) (pred1 : pred) (var1 : var).
+  Definition unionWithCurrStore : listS (varS ~*~ valS) ~> stateS unitS := injF _unionWithCurrStore _.
 
-    Definition lookupBySubjectGeneric  : state unit :=
-      (H.read
-         <$> ((extractAddr <$> evalExpr @ expr1) >>= stopNone)
-         <*> pure @ pred1
-         <*> getHeap) >>= stopNone >>= updateVar var1
-      .
-  End LookupBySubjectGeneric.
-  Instance lookupBySubjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySubjectGeneric.
+  Definition _lookupAtom (p : pred) (tl : list (@term literal)) : state (H.l (list (var * val)) _) :=
+    (H.lookup @ p)
+        <$> (evalTermList @ tl)
+        <*> getHeap.
+
+  Instance _lookupAtom_Proper : Proper (equiv ==> equiv ==> equiv) _lookupAtom.
   Proof.
-    solve_properS lookupBySubjectGeneric.    
+    solve_properS _lookupAtom.
   Qed.
+  Definition lookupAtom := injF2 _lookupAtom _.
 
+  Section LookupGeneric.
+    Context (p : pred) (tl : list (@term literal)).
 
-
-  Section LookupByObjectGeneric.
-    Context
-      (var1 : var) (pred1 : pred) (expr1 : expr).
-    Definition lookupByObjectGeneric : state unit :=
-      (H.lookupByObject
-         @ pred1
-         <$> evalExpr @ expr1
-         <*> getHeap) >>= branch var1.
-  End LookupByObjectGeneric.
-
-  Instance lookupByObjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupByObjectGeneric.
+    Definition lookupGeneric : state unit :=
+      lookupAtom @ p @ tl >>= branchVal >>= unionWithCurrStore.
+  End LookupGeneric.
+  Instance lookupGeneric_Proper : Proper (equiv ==> equiv ==> equiv) lookupGeneric.
   Proof.
-    solve_properS lookupByObjectGeneric. 
-  Qed.
-
-
-  Section LookupByPredGeneric.
-    Context
-      (var1 : var) (pred1 : pred) (var2 : var).
-    Definition lookupByPredGeneric : state unit :=
-      stopFalse @ (var1 =? var2) >>
-        H.lookupByPred @ pred1
-        <$> getHeap >>= branch2 var1 var2
-  .
-  End LookupByPredGeneric.
-  Instance lookupByPredGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupByPredGeneric.
-  Proof.
-    solve_properS lookupByPredGeneric.
-  Qed.
-
-  Section BuiltInGeneric.
-    Context
-      (builtin : builtInCommand).
-    Definition builtInGeneric : state unit :=
-      (interpretBuiltInCommand
-         @ builtin).
-  End BuiltInGeneric.
-  Instance builtInGeneric_Proper : Proper (equiv ==> equiv) builtInGeneric.
-  Proof.
-    solve_properS builtInGeneric.
-  Qed.
-
-  Section NegationGeneric.
-    Context
-      (a : state unit).
-    Definition negationGeneric : state unit := run @ a >>= stopNotNull.
-  End NegationGeneric.
-  Instance negationGeneric_Proper : Proper (equiv ==> equiv) negationGeneric.
-  Proof.
-    solve_properS negationGeneric.
-  Qed.
-  
-  Section ClearVarGeneric.
-    Context
-      (v : var).
-    Definition clearVarGeneric : state unit :=
-      updateStore @ (S.delete @ v).
-  End ClearVarGeneric.
-  Instance clearVarGeneric_Proper : Proper (equiv ==> equiv) clearVarGeneric.
-  Proof.
-    solve_properS clearVarGeneric.
-  Qed.
-
-  Section ExistentialQuantificationGeneric.
-    Context
-      (a : state unit).
-    Definition existentialQuantificationGeneric : state unit :=
-      run @ a >>= stopNull.
-  End ExistentialQuantificationGeneric.
-  Instance existentialQuantificationGeneric_Proper : Proper (equiv ==> equiv) existentialQuantificationGeneric.
-  Proof.
-    solve_properS existentialQuantificationGeneric.
+    solve_properS lookupGeneric.    
   Qed.
 
   
-  Existing Instance sh_NearSemiRing.
-
-
-
-  Section MutateGeneric.
+  Section InsertGeneric.
     Context
-      (expr1 : expr) (pred0 : pred) (expr2 : expr).
+      (p : pred) (tl : list (@term literal)).
 
-    Definition mutateGeneric : state unit :=
-      (H.update
-         <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
-         <*> pure @ pred0 
-         <*> evalExpr @ expr2
-         <*> getHeap) >>= putHeap.
-  End MutateGeneric.
-  Instance mutateGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) mutateGeneric.
+    Definition insertGeneric : state unit :=
+      (H.insert @ p
+         <$> (evalTermListVal @ tl)
+         <*> getHeap) >>= stopNone >>= putHeap.
+  End InsertGeneric.
+  Instance insertGeneric_Proper : Proper (equiv ==> equiv ==> equiv) insertGeneric.
   Proof.
-    solve_properS mutateGeneric.
+    solve_properS insertGeneric.
   Qed.
-
-  Section NewAddrGeneric.
-    Context
-      (var1 : var) (type1 : type).
-    Definition newAddrGeneric : state unit :=
-      ((idS *** addrToVal) <$> ((H.newAddr @ type1 <$> getHeap) >>= stopNone)) >>= updateVar2 var1.
-  End NewAddrGeneric.
-  Instance newAddrGeneric_Proper : Proper (equiv ==> equiv ==> equiv) newAddrGeneric.
-  Proof.
-    solve_properS newAddrGeneric.
-  Qed.
-
 
   Section DeleteGeneric.
     Context
-      (expr1 : expr).
+      (p : pred) (tl : list (@term literal)).
+
     Definition deleteGeneric : state unit :=
-      (H.delete
-         <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
-         <*> getHeap) >>= putHeap.
+      (H.delete @ p
+         <$> evalTermListVal @ tl 
+         <*> getHeap) >>= stopNone >>= putHeap.
   End DeleteGeneric.
 
-  Instance DeleteGeneric_Proper : Proper (equiv ==> equiv) deleteGeneric.
+  Instance DeleteGeneric_Proper : Proper (equiv ==> equiv ==> equiv) deleteGeneric.
   Proof.
-    solve_proper.
+    solve_properS deleteGeneric.
   Qed.
 
-Fixpoint _reduce (comm : command)  : state unit :=
-    match comm with
-      | cFilter expr pred expr2  =>
-        lookupBySPOGeneric expr pred expr2
-      | cBuiltIn builtin  =>
-        builtInGeneric builtin
-      | cLookupBySubject  expr pred var =>
-        lookupBySubjectGeneric expr pred var
-      | cLookupByObject var  pred expr =>
-        lookupByObjectGeneric var  pred expr
-      | cLookupByPred  var pred var2 =>
-        lookupByPredGeneric var pred var2
-      | form0 ⊗ form1 =>
-          times @ (_reduce form0) @ (_reduce form1)
-      | form0 ⊕ form1 =>
-        plus @ (_reduce form0) @ (_reduce form1)
-      | cMutate expr pred0 expr2 =>
-        mutateGeneric expr pred0 expr2
-      | cNewAddr var type =>
-        newAddrGeneric var type
-      | cDelete expr =>
-        deleteGeneric expr
-      | 𝟏 => one
-      | 𝟎 => zero
-      | ¬ form =>
-        negationGeneric (_reduce form)
-      | cClearVar var =>
-        clearVarGeneric var
-      | ∃ form =>
-        existentialQuantificationGeneric (_reduce form) 
+Fixpoint _reduce (pc : qalPrimitiveCommand)  : state unit :=
+    match pc with
+      | pcInsert pred al =>
+        insertGeneric pred al
+      | pcDelete pred al =>
+        deleteGeneric pred al
+      | pcAtomic pred tl =>
+        lookupGeneric pred tl
     end
   .
 
-
-
-   
-
-  Definition reduce : commandS ~> stateS unitS.
-    refine (injF _reduce _).
-
-  Defined.
-
-
-End CommandModel.
-
-Module SemanticEquivalence (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
-       (S : Store VT)    (H : Heap TT AT PT VT) (B : BuiltInExpr VT S)
-       (BIC : BuiltInCommand TT AT PT VT S H).
-  Module EM := ExprModel VT  S B.
-  Module CM := CommandModel TT AT PT VT S  H B BIC.
-  Import TT AT PT VT S H EM CM.
-  Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
-  
-  Notation "a ≌ b" := (sem_eq a b) (at level 99).
-
-  Instance sem_eq_Reflexive : Reflexive sem_eq.
-  Proof.
-    unfold Reflexive, sem_eq. intros. reflexivity.
-  Qed.
-
-  Instance sem_eq_Transitive : Transitive sem_eq.
-  Proof.
-    unfold Transitive, sem_eq. intros. transitivity (reduce @ y). auto. auto.
-  Qed.
-
-  Instance sem_eq_Symmetric : Symmetric sem_eq.
-  Proof.
-    unfold Symmetric, sem_eq. intros. symmetry. auto.
-  Qed.
-
-  Program Instance seq_eq_Equivalence : Equivalence sem_eq.
-
-  Instance semEqS : Setoid command :=
-    {
-      equiv := sem_eq
-    }
-  .
-
-  Instance cSeq_Proper : Proper (sem_eq ==> sem_eq ==> sem_eq) cSeq.
-  Proof.
-    unfold Proper, respectful, sem_eq. intros. unfold reduce, _reduce. normalize. fold _reduce. rewritesr. 
-  Qed.
-
-  Definition cSeqS : semEqS ~> semEqS ~~> semEqS := injF2 cSeq _.
-
-  Instance cChoice_Proper : Proper (sem_eq ==> sem_eq ==> sem_eq) cChoice.
-  Proof.
-    unfold Proper, respectful, sem_eq. intros. unfold reduce, _reduce. normalize. fold _reduce. rewritesr. 
-  Qed.
-
-  Definition cChoiceS : semEqS ~> semEqS ~~> semEqS := injF2 cChoice _.
-
-  Instance semEq_NearSemiRing : @NearSemiRing command semEqS.
-  Proof.
-    exists (cOne) (cZero) (cSeqS) (cChoiceS).
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_left_unit.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_right_unit.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_associativity.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply plus_left_unit.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply plus_right_unit.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply plus_associativity.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_left_absorb.
-    intros. simpl equiv. unfold sem_eq, reduce, _reduce. normalize. fold _reduce. apply times_left_distributivity.
-  Defined.
-
-End SemanticEquivalence.
+  Definition reduce : (@qalPrimitiveCommandS literal pred ) ~> stateS unitS := injF _reduce _.
+  Definition primitiveCommand := @qalPrimitiveCommand literal pred.
+  Definition primitiveCommandS := @qalPrimitiveCommandS literal pred.
+  Definition interpretPrimitiveCommand := reduce.
+End QALPrimitiveCommand.
 
 
   (*

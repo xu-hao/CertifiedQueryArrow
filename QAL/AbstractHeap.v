@@ -57,6 +57,8 @@ Module Type AbstractHeap (PT : PredType) (VT : ValType).
   Parameter lookup : PT.predS ~> listS (argumentS _ VT.valS) ~~> tS ~~> lS _ (listS (varS ~*~ VT.valS)).
   Parameter insert : PT.predS ~> listS VT.valS ~~> tS ~~> maybeS tS.
   Parameter delete : PT.predS ~> listS VT.valS ~~> tS ~~> maybeS tS.
+  Parameter insertProp : PT.predS ~> listS VT.valS ~~> listS VT.valS ~~> tS ~~> maybeS tS.
+  Parameter deleteProp : PT.predS ~> listS VT.valS ~~> listS VT.valS ~~> tS ~~> maybeS tS.
 
   Notation "a ⊥ b" := (disjoint @ a @ b) (at level 15). 
   Notation "a ⋅ b" := (union @ a @ b) (at level 15). 

@@ -2,8 +2,6 @@ Require Import QAL.Assert Algebra.Utils Algebra.Monad SetoidUtils Algebra.Setoid
 
 Require Import Coq.Lists.List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
-Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A ) := times @ a @ b == times @ b @ a.
-
 Section PrimitiveCommand.
   Context
     {literal : Type}
@@ -36,6 +34,8 @@ Section PrimitiveCommand.
   Inductive qalPrimitiveCommand :=
   | pcInsert : pred -> list term -> qalPrimitiveCommand
   | pcDelete : pred -> list term -> qalPrimitiveCommand
+  | pcInsertProp : pred -> list term -> list term -> qalPrimitiveCommand
+  | pcDeleteProp : pred -> list term -> list term -> qalPrimitiveCommand
   | pcAtomic : pred -> list term -> qalPrimitiveCommand
   .
 
@@ -50,6 +50,8 @@ Section PrimitiveCommand.
     match pc with
       | pcInsert _ tl => tlFreeVars tl
       | pcDelete _ tl => tlFreeVars tl
+      | pcInsertProp _ ktl ptl => tlFreeVars ktl ∪ tlFreeVars ptl
+      | pcDeleteProp _ ktl ptl => tlFreeVars ktl ∪ tlFreeVars ptl
       | pcAtomic _ tl => tlFreeVars tl
     end
   .
@@ -123,7 +125,7 @@ Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
 
   Definition evalTermListVal : listS (@termS literal) ~> stateS (listS valS) := mapM @ evalTermVal.
 
-  (* update var in store *)
+(*  (* update var in store *)
   Definition updateVar (var1 : var) : valS ~> stateS unitS.
     refine (injF (fun val1 =>  
     
@@ -149,7 +151,7 @@ Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
     Qed.
     apply updateVar2_1.    
   Defined.
-  
+  *)
 (*  Definition branch (var1 : var) : H.lS _ addrS ~> stateS unitS :=
     choice ∘ fmap @ (updateVar var1 ∘ addrToVal) .
   
@@ -167,11 +169,11 @@ Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
   *)
 
 
-  Definition updateStore : listS (varS ~*~ valS) ~> S.tS ~~> S.tS :=
+  Definition updateStore2 : listS (varS ~*~ valS) ~> S.tS ~~> S.tS :=
     flipS @ (fold_rightS @ (uncurryS @ S.update)).
   
   Definition _unionWithCurrStore (s : list (var * val)) : state unit :=
-    updateStore @ s <$> getStore >>= putStore.
+    updateStore @ (updateStore2 @ s).
 
   Instance _unionWithCurrStore_Proper : Proper (equiv ==> equiv) _unionWithCurrStore.
   Proof.
@@ -232,12 +234,47 @@ Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
     solve_properS deleteGeneric.
   Qed.
 
+  Section InsertPropGeneric.
+    Context
+      (p : pred) (ktl ptl : list (@term literal)).
+
+    Definition insertPropGeneric : state unit :=
+      (H.insertProp @ p
+         <$> (evalTermListVal @ ktl)
+         <*> (evalTermListVal @ ptl)
+         <*> getHeap) >>= stopNone >>= putHeap.
+  End InsertPropGeneric.
+  Instance insertPropGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) insertPropGeneric.
+  Proof.
+    solve_properS insertPropGeneric.
+  Qed.
+
+  Section DeletePropGeneric.
+    Context
+      (p : pred) (ktl ptl : list (@term literal)).
+
+    Definition deletePropGeneric : state unit :=
+      (H.deleteProp @ p
+         <$> (evalTermListVal @ ktl)
+         <*> (evalTermListVal @ ptl)
+         <*> getHeap) >>= stopNone >>= putHeap.
+  End DeletePropGeneric.
+
+  Instance DeletePropGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) deletePropGeneric.
+  Proof.
+    solve_properS deletePropGeneric.
+  Qed.
+
 Fixpoint _reduce (pc : qalPrimitiveCommand)  : state unit :=
     match pc with
-      | pcInsert pred al =>
-        insertGeneric pred al
-      | pcDelete pred al =>
-        deleteGeneric pred al
+      | pcInsert pred tl =>
+        insertGeneric pred tl
+      | pcDelete pred tl =>
+        deleteGeneric pred tl
+      | pcInsertProp pred ktl ptl =>
+        insertPropGeneric pred ktl ptl
+      | pcDeleteProp pred ktl ptl =>
+        deletePropGeneric pred ktl ptl
       | pcAtomic pred tl =>
         lookupGeneric pred tl
     end

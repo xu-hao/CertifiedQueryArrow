@@ -1,4 +1,4 @@
-Require Import Assert Algebra.Utils Algebra.Monad SetoidUtils Algebra.SetoidCat.ListUtils Algebra.SetoidCat Algebra.Monad.StoreHeap Algebra.Monad.ContT Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Functor Algebra.Alternative Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Applicative Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.UnitUtils Algebra.Monoid.BoolUtils Algebra.Monoid.Alternative Algebra.Alternative.List Algebra.Functor.List Algebra.FoldableFunctor.List Algebra.Monad.Utils QAL.Store QAL.Heap.
+Require Import Algebra.Assert Algebra.Utils Algebra.Monad SetoidUtils Algebra.SetoidCat.ListUtils Algebra.SetoidCat Algebra.Monad.StoreHeap Algebra.Monad.ContT Algebra.NearSemiRing Algebra.Monoid Tactics Expr Definitions Algebra.FoldableFunctor Algebra.SetoidCat.PairUtils Algebra.Functor Algebra.Alternative Algebra.SetoidCat.MaybeUtils Algebra.Monad.Maybe Algebra.Applicative Algebra.SetoidCat.BoolUtils Algebra.SetoidCat.UnitUtils Algebra.Monoid.BoolUtils Algebra.Monoid.Alternative Algebra.Alternative.List Algebra.Functor.List Algebra.FoldableFunctor.List Algebra.Monad.Utils.
 
 Require Import Coq.Lists.List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
@@ -6,29 +6,16 @@ Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A 
 
 Section Command.
   Context
-    {type : Type}
-    {pred : Type}
-    {builtInExpr : Type}
-    {builtInCommand : Type}.
+    {primitiveCommand : Type}
+    {aggregator : Type}.
 
-  Definition expr := @expr builtInExpr. 
-  
   Inductive command :=
-  | cNewAddr : var -> type -> command
-  | cFilter : expr -> pred -> expr -> command
-  | cBuiltIn : builtInCommand -> command
-  | cLookupBySubject : expr -> pred -> var -> command
-  | cLookupByObject : var -> pred -> expr -> command
-  | cLookupByPred : var -> pred -> var -> command
-  | cMutate : expr -> pred -> expr -> command
-  | cDelete : expr -> command
+  | cPrimitive : primitiveCommand -> command
   | cSeq : command -> command -> command
   | cChoice : command -> command -> command
   | cOne : command
   | cZero : command
-  | cClearVar : var -> command
-  | cExists : command -> command
-  | cNot : command -> command
+  | cAggregate : aggregator -> command -> command
   .
 
   Program Instance commandS : Setoid command.
@@ -37,57 +24,68 @@ End Command.
 
 Notation "𝟏" := (cOne) (at level 82).
 Notation "𝟎" := (cZero) (at level 82).
-Notation "∃ b" := (cExists b) (at level 83).
-Notation "¬ a" := (cNot a) (at level 80).
+(* Notation "∃ b" := (cExists b) (at level 83).
+Notation "¬ a" := (cNot a) (at level 80). *)
 Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
 Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
 
+Module Type AbstractStore.
+  Parameter t : Type.
+  Parameter tS : Setoid t.
+End AbstractStore.
 
-Module Types (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
+Module Type AbstractHeap.
+  Parameter t : Type.
+  Parameter tS : Setoid t.
+  Parameter l : forall A, (Setoid A) -> Type.
+  Parameter lS : forall A (AS : Setoid A), Setoid (l A AS).
+  Parameter l_Alternative : @Alternative l lS.
+  Parameter l_Functor : @Functor l lS.
+  Parameter l_Foldable : @FoldableFunctor l lS l_Functor.
+  Parameter l_Applicative : @Applicative l lS l_Functor.
+End AbstractHeap.  
+
+Module Types (S : AbstractStore) (H : AbstractHeap).
   Definition state A {AS : Setoid A} : Type := @sh _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
 
   Instance stateS {A} (AS : Setoid A) : Setoid (state A) := @shS _ H.tS _ S.tS _ (H.lS) _ unitS _ AS.
   Instance state_Monad : @Monad (@state) (@stateS) := sh_Monad.
 End Types.
 
-Module Type BuiltInCommand (TT : TypeType ) (AT : AddrType) (PT : PredType) (VT : ValType) (S : Store VT) (H : Heap TT AT PT VT).
-  Import TT AT PT VT.
-  Module TS := Types TT AT PT VT S H.
+Module Type PrimitiveCommand (S : AbstractStore) (H : AbstractHeap).
+  Module TS := Types S H.
   Import TS.
-  Parameter builtInCommand : Type.
-  Parameter builtInCommandS : Setoid builtInCommand.
-  Parameter freeVarsBuiltInCommand : builtInCommandS ~> varSetS.
-  Parameter interpretBuiltInCommand : builtInCommandS ~> stateS unitS.
-End BuiltInCommand.
+  Parameter primitiveCommand : Type.
+  Parameter primitiveCommandS : Setoid primitiveCommand.
+  Parameter freeVarsPrimitiveCommand : primitiveCommandS ~> varSetS.
+  Parameter interpretPrimitiveCommand : primitiveCommandS ~> stateS unitS.
+End PrimitiveCommand.
 
-Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
-       (S : Store VT) (H : Heap TT AT PT VT) (B : BuiltInExpr VT S)
-       (BIC : BuiltInCommand TT AT PT VT S H).
+Module Type Aggregator (S : AbstractStore) (H : AbstractHeap).
+  Module TS := Types S H.
+  Import TS.
+  Parameter aggregator : Type.
+  Parameter aggregatorS : Setoid aggregator.
+  Parameter freeVarsAggregator : aggregatorS ~> varSetS ~~> varSetS.
+  Parameter interpretAggregator : aggregatorS ~> H.lS _ S.tS ~~> stateS unitS.
+End Aggregator.
+
+Module CommandModel (S : AbstractStore) (H : AbstractHeap) 
+       (PC : PrimitiveCommand S H) (AGG: Aggregator S H).
   Open Scope type_scope.
-  Module EM := ExprModel VT S B.
-  Module HU := HeapUtils TT AT PT VT H.
-  Module TS := Types TT AT PT VT S H.
-  Import TT AT PT VT EM S H HU B BIC TS.
-  Definition command := @command type pred builtInExpr builtInCommand.
-  Instance commandS : Setoid command := @commandS type pred builtInExpr builtInCommand.
+  Module TS := Types S H.
+  Import S H PC AGG TS.
+  Definition command := @command primitiveCommand aggregator.
+  Instance commandS : Setoid command := @commandS primitiveCommand aggregator.
       
   Fixpoint cFreeVars (comm : command) :=
     match comm with
-      | cNewAddr var type  => ﹛ var ﹜
-      | cFilter expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-      | cBuiltIn builtin => freeVarsBuiltInCommand @ builtin
-      | cLookupBySubject expr pred var => exprFreeVars expr ∪ ﹛ var ﹜
-      | cLookupByObject var pred expr => ﹛ var ﹜ ∪ exprFreeVars expr
-      | cLookupByPred var pred var2 => ﹛ var ﹜ ∪ ﹛ var2 ﹜
-      | cMutate expr pred expr2 => exprFreeVars expr ∪ exprFreeVars expr2
-      | cDelete expr => exprFreeVars expr
+      | cPrimitive pc => freeVarsPrimitiveCommand @ pc
       | cSeq comm comm2 => cFreeVars comm ∪ cFreeVars comm2
       | cChoice comm comm2 => cFreeVars comm ∪ cFreeVars comm2
       | cOne => ∅
       | cZero => ∅
-      | cNot form => cFreeVars form
-      | cClearVar v => ﹛ v ﹜
-      | cExists form => cFreeVars form
+      | cAggregate agg form => freeVarsAggregator @ agg @ cFreeVars form
     end
   .
 
@@ -97,10 +95,10 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
   Definition runState {A B} {AS : Setoid A} {BS : Setoid B} : stateS AS ~> (AS ~~> stateStoreHeapS) ~~> stateStoreHeapS := runSh. 
 
   Existing Instance alternative_Monoid.
-  Existing Instance list_Alternative.
+  Existing Instance l_Alternative.
   Existing Instance sh_Alternative.
-  Existing Instance listFunctor.
-  Existing Instance list_Foldable.
+  Existing Instance l_Functor.
+  Existing Instance l_Foldable.
 
   Definition stop {A} {AS : Setoid A}: state A := mempty.
 
@@ -142,11 +140,11 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     simple refine (injF (fun l => fold @ (constS _ @ false <$> l)) _).
     exact boolS.
     apply H.lS.
-    exact H.func.
-    exact H.foldable.
+    exact H.l_Functor.
+    exact H.l_Foldable.
     exact bool_and_Monoid.
     apply H.lS.
-    exact H.func.
+    exact H.l_Functor.
     Lemma null_l_1 : forall A AS, Proper (equiv ==> equiv)
      (fun l0 : l A AS =>
       fold @
@@ -194,56 +192,6 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     Qed.
     apply stopNull_1.
   Defined.
-
-  Definition evalExpr : exprS ~> stateS valS.
-    simple refine (injF (fun expr1 => 
-                           (exprEval
-                             <$> getStore
-                             <*> pure @ expr1) >>= stopNone) _).
-  Defined.
-
-  Existing Instance valS.
-  (* update var in store *)
-  Definition updateVar (var1 : var) : valS ~> stateS unitS.
-    refine (injF (fun val1 =>  
-    
-                    updateStore @ (S.update @ var1 @ val1)) _).
-    Lemma updateVar_1 : forall var1, Proper (equiv ==> equiv)
-                                            (fun val1 : val => updateStore @ (S.update @ var1 @ val1)).
-    Proof.
-      intros. solve_proper.
-    Qed.
-    apply updateVar_1.
-  Defined.
-
-  Definition updateVar2 (var1 : var) : H.tS ~*~ valS ~> stateS unitS.
-    simple refine (injF (fun ha : H.t * val  => let (h', addr) := ha in putHeap @ h' >> updateVar var1 @ addr) _).
-    intros. apply stateS.
-    exact state_Monad.
-    Lemma updateVar2_1 : forall var1, Proper (equiv  ==> equiv)
-     (fun ha : t * val =>
-      let (h', addr) := ha in
-      andThen @ (putHeap @ h') @ (updateVar var1 @ addr)).
-    Proof.
-      autounfold. intros. rewrites. destruct x,y. destruct H. rewritesr.
-    Qed.
-    apply updateVar2_1.    
-  Defined.
-  
-  Definition branch (var1 : var) : H.lS _ addrS ~> stateS unitS :=
-    choice ∘ fmap @ (updateVar var1 ∘ addrToVal) .
-  
-  Definition branch2 (var1 var2 : var) : H.lS _ (addrS ~*~ valS) ~> stateS unitS.
-    refine (choice ∘ fmap @ (injF (fun val1 => updateVar var1 @ (addrToVal @ (fst val1)) >> updateVar var2 @ (snd val1)) _)).
-    Lemma branch2_1 : forall var1 var2, Proper (equiv ==> equiv)
-                                           (fun val1 : addr * val =>
-                                              
-                                              (updateVar var1 @ (addrToVal @ (fst val1))) >> (updateVar var2 @ snd val1)).
-    Proof.
-      intros. solve_proper.
-    Qed.
-    apply branch2_1.
-  Defined.
   
   Definition branchStore : H.lS _ S.tS ~> stateS unitS :=
     choice ∘ (fmap @ putStore).
@@ -252,14 +200,14 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
   Definition _retCont : S.tS ~> H.lS _ (S.tS ~*~ unitS).
     simple refine (injF (fun (s' : S.t) => pure @ (s', tt) : H.l (S.t * unit) (S.tS ~*~ unitS)) _).
     apply H.lS.
-    apply H.func.
-    apply H.app.
+    apply H.l_Functor.
+    apply H.l_Applicative.
     Lemma _retCont_1 : @Proper (S.t -> l (S.t * unit) (S.tS ~*~ unitS))
      (@equiv S.t S.tS ==>
       @equiv (l (S.t * unit) (S.tS ~*~ unitS))
         (lS (S.t * unit) (S.tS ~*~ unitS)))
      (fun s' : S.t =>
-      @pure l lS func app (S.t * unit) (S.tS ~*~ unitS) @ (s', tt)
+      @pure l lS H.l_Functor H.l_Applicative (S.t * unit) (S.tS ~*~ unitS) @ (s', tt)
       :
         l (S.t * unit) (S.tS ~*~ unitS)).
     Proof.
@@ -272,13 +220,12 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
     constS unitS @ (curryS @ (idS *** _retCont)).
 
  
- Unset Printing Implicit.
 
   Definition extractStores : stateS unitS ~> H.tS ~~> S.tS ~~> H.tS ~*~ H.lS _ S.tS.
     simple refine (injF3 (fun a h s => (idS *** fmap @ fstS) @ (runSh @ a @ retCont @ h @ s)) _).
     apply H.tS.
     apply H.lS.
-    apply H.func.
+    apply H.l_Functor.
     Lemma extractStores_1 : Proper (equiv ==> equiv ==> equiv ==> equiv)
      (fun (a : (unitS ~~> storeHeapS unitS) ~> storeHeapS unitS) 
         (h : t) (s : S.t) =>
@@ -302,194 +249,45 @@ Module CommandModel (TT:TypeType) (AT :AddrType) (PT : PredType )(VT : ValType)
   Defined.
 
 
-  Section LookupBySPOGeneric.
-    Context (expr1 : expr) (pred1 : pred) (expr2 :expr).
-
-    Definition lookupBySPOGeneric  : state unit :=
-      (lookupBySPO
-        <$> ((extractAddr <$> evalExpr @ expr1) >>= stopNone)
-        <*> pure @ pred1
-        <*> evalExpr @ expr2
-        <*> getHeap) >>= stopFalse.
-  End LookupBySPOGeneric.
-
-  
-  Instance lookupBySPOGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySPOGeneric.
-  Proof.
-    solve_properS lookupBySPOGeneric.
-  Qed.
-  
-  
-  
-  Section LookupBySubjectGeneric.
+  Section PrimitiveCommandGeneric.
     Context
-      (expr1 : expr) (pred1 : pred) (var1 : var).
-
-    Definition lookupBySubjectGeneric  : state unit :=
-      (H.read
-         <$> ((extractAddr <$> evalExpr @ expr1) >>= stopNone)
-         <*> pure @ pred1
-         <*> getHeap) >>= stopNone >>= updateVar var1
-      .
-  End LookupBySubjectGeneric.
-  Instance lookupBySubjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupBySubjectGeneric.
+      (pc : primitiveCommand).
+    Definition primitiveCommandGeneric : state unit :=
+      (interpretPrimitiveCommand
+         @ pc).
+  End PrimitiveCommandGeneric.
+  Instance primitiveCommand_Proper : Proper (equiv ==> equiv) primitiveCommandGeneric.
   Proof.
-    solve_properS lookupBySubjectGeneric.    
+    solve_properS primitiveCommandGeneric.
   Qed.
 
-
-
-  Section LookupByObjectGeneric.
+  Section AggregateGeneric.
     Context
-      (var1 : var) (pred1 : pred) (expr1 : expr).
-    Definition lookupByObjectGeneric : state unit :=
-      (H.lookupByObject
-         @ pred1
-         <$> evalExpr @ expr1
-         <*> getHeap) >>= branch var1.
-  End LookupByObjectGeneric.
-
-  Instance lookupByObjectGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupByObjectGeneric.
-  Proof.
-    solve_properS lookupByObjectGeneric. 
-  Qed.
-
-
-  Section LookupByPredGeneric.
-    Context
-      (var1 : var) (pred1 : pred) (var2 : var).
-    Definition lookupByPredGeneric : state unit :=
-      stopFalse @ (var1 =? var2) >>
-        H.lookupByPred @ pred1
-        <$> getHeap >>= branch2 var1 var2
-  .
-  End LookupByPredGeneric.
-  Instance lookupByPredGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) lookupByPredGeneric.
-  Proof.
-    solve_properS lookupByPredGeneric.
-  Qed.
-
-  Section BuiltInGeneric.
-    Context
-      (builtin : builtInCommand).
-    Definition builtInGeneric : state unit :=
-      (interpretBuiltInCommand
-         @ builtin).
-  End BuiltInGeneric.
-  Instance builtInGeneric_Proper : Proper (equiv ==> equiv) builtInGeneric.
-  Proof.
-    solve_properS builtInGeneric.
-  Qed.
-
-  Section NegationGeneric.
-    Context
+      (agg : aggregator)
       (a : state unit).
-    Definition negationGeneric : state unit := run @ a >>= stopNotNull.
-  End NegationGeneric.
-  Instance negationGeneric_Proper : Proper (equiv ==> equiv) negationGeneric.
+    Definition aggregateGeneric : state unit := run @ a >>= interpretAggregator @ agg.
+  End AggregateGeneric.
+  Instance aggregateGeneric_Proper : Proper (equiv ==> equiv ==> equiv) aggregateGeneric.
   Proof.
-    solve_properS negationGeneric.
+    solve_properS aggregateGeneric.
   Qed.
   
-  Section ClearVarGeneric.
-    Context
-      (v : var).
-    Definition clearVarGeneric : state unit :=
-      updateStore @ (S.delete @ v).
-  End ClearVarGeneric.
-  Instance clearVarGeneric_Proper : Proper (equiv ==> equiv) clearVarGeneric.
-  Proof.
-    solve_properS clearVarGeneric.
-  Qed.
-
-  Section ExistentialQuantificationGeneric.
-    Context
-      (a : state unit).
-    Definition existentialQuantificationGeneric : state unit :=
-      run @ a >>= stopNull.
-  End ExistentialQuantificationGeneric.
-  Instance existentialQuantificationGeneric_Proper : Proper (equiv ==> equiv) existentialQuantificationGeneric.
-  Proof.
-    solve_properS existentialQuantificationGeneric.
-  Qed.
 
   
   Existing Instance sh_NearSemiRing.
 
-
-
-  Section MutateGeneric.
-    Context
-      (expr1 : expr) (pred0 : pred) (expr2 : expr).
-
-    Definition mutateGeneric : state unit :=
-      (H.update
-         <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
-         <*> pure @ pred0 
-         <*> evalExpr @ expr2
-         <*> getHeap) >>= putHeap.
-  End MutateGeneric.
-  Instance mutateGeneric_Proper : Proper (equiv ==> equiv ==> equiv ==> equiv) mutateGeneric.
-  Proof.
-    solve_properS mutateGeneric.
-  Qed.
-
-  Section NewAddrGeneric.
-    Context
-      (var1 : var) (type1 : type).
-    Definition newAddrGeneric : state unit :=
-      ((idS *** addrToVal) <$> ((H.newAddr @ type1 <$> getHeap) >>= stopNone)) >>= updateVar2 var1.
-  End NewAddrGeneric.
-  Instance newAddrGeneric_Proper : Proper (equiv ==> equiv ==> equiv) newAddrGeneric.
-  Proof.
-    solve_properS newAddrGeneric.
-  Qed.
-
-
-  Section DeleteGeneric.
-    Context
-      (expr1 : expr).
-    Definition deleteGeneric : state unit :=
-      (H.delete
-         <$> (extractAddr <$> evalExpr @ expr1 >>= stopNone)
-         <*> getHeap) >>= putHeap.
-  End DeleteGeneric.
-
-  Instance DeleteGeneric_Proper : Proper (equiv ==> equiv) deleteGeneric.
-  Proof.
-    solve_proper.
-  Qed.
-
 Fixpoint _reduce (comm : command)  : state unit :=
     match comm with
-      | cFilter expr pred expr2  =>
-        lookupBySPOGeneric expr pred expr2
-      | cBuiltIn builtin  =>
-        builtInGeneric builtin
-      | cLookupBySubject  expr pred var =>
-        lookupBySubjectGeneric expr pred var
-      | cLookupByObject var  pred expr =>
-        lookupByObjectGeneric var  pred expr
-      | cLookupByPred  var pred var2 =>
-        lookupByPredGeneric var pred var2
+      | cPrimitive pc  =>
+        primitiveCommandGeneric pc
       | form0 ⊗ form1 =>
           times @ (_reduce form0) @ (_reduce form1)
       | form0 ⊕ form1 =>
         plus @ (_reduce form0) @ (_reduce form1)
-      | cMutate expr pred0 expr2 =>
-        mutateGeneric expr pred0 expr2
-      | cNewAddr var type =>
-        newAddrGeneric var type
-      | cDelete expr =>
-        deleteGeneric expr
       | 𝟏 => one
       | 𝟎 => zero
-      | ¬ form =>
-        negationGeneric (_reduce form)
-      | cClearVar var =>
-        clearVarGeneric var
-      | ∃ form =>
-        existentialQuantificationGeneric (_reduce form) 
+      | cAggregate agg form =>
+        aggregateGeneric agg (_reduce form)
     end
   .
 
@@ -505,12 +303,11 @@ Fixpoint _reduce (comm : command)  : state unit :=
 
 End CommandModel.
 
-Module SemanticEquivalence (TT : TypeType) (AT : AddrType) (PT : PredType) (VT : ValType)
-       (S : Store VT)    (H : Heap TT AT PT VT) (B : BuiltInExpr VT S)
-       (BIC : BuiltInCommand TT AT PT VT S H).
-  Module EM := ExprModel VT  S B.
-  Module CM := CommandModel TT AT PT VT S  H B BIC.
-  Import TT AT PT VT S H EM CM.
+Module SemanticEquivalence 
+       (S : AbstractStore) (H : AbstractHeap) (PC : PrimitiveCommand S H)
+       (AGG : Aggregator S H).
+  Module CM := CommandModel S H PC AGG.
+  Import S H PC AGG CM.
   Definition sem_eq c1 c2 := reduce @ c1  == reduce @ c2.
   
   Notation "a ≌ b" := (sem_eq a b) (at level 99).

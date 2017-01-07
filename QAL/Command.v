@@ -2,8 +2,6 @@ Require Import Algebra.Utils Algebra.Monad SetoidUtils Algebra.SetoidCat.ListUti
 
 Require Import Coq.Lists.List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
-Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A ) := times @ a @ b == times @ b @ a.
-
 Section Command.
   Context
     {primitiveCommand : Type}
@@ -24,8 +22,6 @@ End Command.
 
 Notation "𝟏" := (cOne) (at level 82).
 Notation "𝟎" := (cZero) (at level 82).
-(* Notation "∃ b" := (cExists b) (at level 83).
-Notation "¬ a" := (cNot a) (at level 80). *)
 Notation "a ⊗ b" := (cSeq a b) (left associativity, at level 86).
 Notation "a ⊕ b" := (cChoice a b) (left associativity, at level 87).
 
@@ -73,9 +69,6 @@ Module CommandAux (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : Abs
   Definition stop {A} {AS : Setoid A}: state A := mempty.
 
   Definition choice {A} {AS : Setoid A}: H.lS _ (stateS AS) ~> stateS AS := fold.
-
-(*  Existing Instance sh_Monad.
-  Existing Instance store_Monad.*)
 
   Definition stopNone {A} {AS : Setoid A} :
     optionS AS ~> stateS AS.
@@ -274,7 +267,7 @@ Module CommandModel (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : A
   
   Existing Instance sh_NearSemiRing.
 
-Fixpoint _reduce (comm : command)  : state unit :=
+  Fixpoint _reduce (comm : command)  : state unit :=
     match comm with
       | cPrimitive pc  =>
         primitiveCommandGeneric pc
@@ -361,6 +354,52 @@ Module SemanticEquivalence
   Defined.
 
 End SemanticEquivalence.
+
+(* 
+Definition  commutative {A} {SA : Setoid A} {nsr : @NearSemiRing _ SA} (a b : A ) := times @ a @ b == times @ b @ a.
+
+ (* update var in store *)
+  Definition updateVar (var1 : var) : valS ~> stateS unitS.
+    refine (injF (fun val1 =>  
+    
+                    updateStore @ (S.update @ var1 @ val1)) _).
+    Lemma updateVar_1 : forall var1, Proper (equiv ==> equiv)
+                                            (fun val1 : val => updateStore @ (S.update @ var1 @ val1)).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply updateVar_1.
+  Defined.
+
+  Definition updateVar2 (var1 : var) : H.tS ~*~ valS ~> stateS unitS.
+    simple refine (injF (fun ha : H.t * val  => let (h', addr) := ha in putHeap @ h' >> updateVar var1 @ addr) _).
+    intros. apply stateS.
+    exact state_Monad.
+    Lemma updateVar2_1 : forall var1, Proper (equiv  ==> equiv)
+     (fun ha : t * val =>
+      let (h', addr) := ha in
+      andThen @ (putHeap @ h') @ (updateVar var1 @ addr)).
+    Proof.
+      autounfold. intros. rewrites. destruct x,y. destruct H. rewritesr.
+    Qed.
+    apply updateVar2_1.    
+  Defined.
+  *)
+(*  Definition branch (var1 : var) : H.lS _ addrS ~> stateS unitS :=
+    choice ∘ fmap @ (updateVar var1 ∘ addrToVal) .
+  
+  Definition branch2 (var1 var2 : var) : H.lS _ (addrS ~*~ valS) ~> stateS unitS.
+    refine (choice ∘ fmap @ (injF (fun val1 => updateVar var1 @ (addrToVal @ (fst val1)) >> updateVar var2 @ (snd val1)) _)).
+    Lemma branch2_1 : forall var1 var2, Proper (equiv ==> equiv)
+                                           (fun val1 : addr * val =>
+                                              
+                                              (updateVar var1 @ (addrToVal @ (fst val1))) >> (updateVar var2 @ snd val1)).
+    Proof.
+      intros. solve_proper.
+    Qed.
+    apply branch2_1.
+  Defined.
+  *)
 
 
   (*

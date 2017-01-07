@@ -34,8 +34,8 @@ End WSNotations.
 Module Type ValType.
   Parameter val : Type.
   Parameter valS : Setoid val.
-  Parameter storableS : valS ~> boolS.
-  Parameter appVal : valS ~> valS ~~> maybeS valS.
+(*  Parameter storableS : valS ~> boolS.
+  Parameter appVal : valS ~> valS ~~> maybeS valS. *)
   Axiom equiv_dec : forall val1 val2, {val1 == val2} + {~ val1 == val2}.
 End ValType.
 

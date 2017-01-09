@@ -2,11 +2,28 @@ Require Import Algebra.Utils Algebra.Monad SetoidUtils Algebra.SetoidCat.ListUti
 
 Require Import Coq.Lists.List PeanoNat RelationClasses Relation_Definitions Morphisms Coq.Program.Basics SetoidClass.
 
+Module Type BuiltInCommand (PT : PredType) (VT : ValType) (S : AbstractStore VT) (H : AbstractHeap PT VT).
+  Module TS := Types PT VT S H.
+  Import TS.
+  Parameter builtInCommand : Type.
+  Parameter builtInCommandS : Setoid builtInCommand.
+  Parameter freeVarsBuiltInCommand : builtInCommandS ~> varSetS.
+  Parameter interpretBuiltInCommand : builtInCommandS ~> stateS unitS.
+End BuiltInCommand.
+
+Module Type Literal (VT : ValType).
+  Import VT.
+  Parameter literal : Type.
+  Parameter literalS : Setoid literal.
+  Parameter interpretLiteral : literalS ~> valS.
+End Literal.
+
 Section PrimitiveCommand.
+
   Context
     {literal : Type}
     {pred : Type}
-  .
+    {builtin : Type}.
   
   Inductive term :=
   | termVar : var -> term
@@ -15,23 +32,8 @@ Section PrimitiveCommand.
 
   Program Instance termS : Setoid term.
 
-  Import FSetNatNotations. 
-
-  Definition _termFreeVars (t : term) : FVarSet.t :=
-    match t with
-        | termVal _ => ∅
-        | termVar v => ﹛ v ﹜ 
-    end
-  .
-  
-  Instance _termFreeVars_Proper : Proper (equiv ==> equiv) _termFreeVars.
-  Proof.
-    solve_proper.
-  Qed.
-
-  Definition termFreeVars := injF _termFreeVars _.
-
   Inductive qalPrimitiveCommand :=
+  | pcBuiltIn : builtin -> qalPrimitiveCommand
   | pcInsert : pred -> list term -> qalPrimitiveCommand
   | pcDelete : pred -> list term -> qalPrimitiveCommand
   | pcInsertProp : pred -> list term -> list term -> qalPrimitiveCommand
@@ -41,13 +43,41 @@ Section PrimitiveCommand.
 
   Program Instance qalPrimitiveCommandS : Setoid qalPrimitiveCommand.
 
+End PrimitiveCommand.
+
+Import FSetNatNotations. 
+Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
+       (L : Literal VT) (S : AbstractStore VT) (H : AbstractHeap PT VT) (BC : BuiltInCommand PT VT S H) : PrimitiveCommand PT VT S H.
+  Open Scope type_scope.
+  Module TS := Types PT VT S H.
+  Module CA := CommandAux PT VT S H.
+  Import PT VT L S H BC TS CA.
+
+  Definition _termFreeVars (t : (@term literal)) : FVarSet.t :=
+    match t with
+        | termVal _ => ∅
+        | termVar v => ﹛ v ﹜ 
+    end
+  .
+  
+  Existing Instance termS.
+
+  Instance _termFreeVars_Proper : Proper (equiv ==> equiv) _termFreeVars.
+  Proof.
+    solve_proper.
+  Qed.
+
+  Definition termFreeVars := injF _termFreeVars _.
+
+
   Definition tlFreeVars (tl : list term) :=
             fold_right (fun t  fv =>
                       (termFreeVars @ t) ∪ fv) ∅ tl
   .
 
-  Definition _qalPrimitiveCommandFreeVars (pc : qalPrimitiveCommand) : FVarSet.t :=
+  Definition _qalPrimitiveCommandFreeVars (pc : @qalPrimitiveCommand literal pred builtInCommand) : FVarSet.t :=
     match pc with
+      | pcBuiltIn b => freeVarsBuiltInCommand @ b
       | pcInsert _ tl => tlFreeVars tl
       | pcDelete _ tl => tlFreeVars tl
       | pcInsertProp _ ktl ptl => tlFreeVars ktl ∪ tlFreeVars ptl
@@ -55,31 +85,16 @@ Section PrimitiveCommand.
       | pcAtomic _ tl => tlFreeVars tl
     end
   .
-  
+
+  Existing Instance qalPrimitiveCommandS.
   Instance _qalPrimitiveCommandFreeVars_Proper : Proper (equiv ==> equiv) _qalPrimitiveCommandFreeVars.
    Proof.
     solve_proper.
   Qed.
 
   Definition qalPrimitiveCommandFreeVars := injF _qalPrimitiveCommandFreeVars _.
-  
-End PrimitiveCommand.
 
-Module Type Literal (VT : ValType).
-  Import VT.
-  Parameter literal : Type.
-  Parameter literalS : Setoid literal.
-  Parameter interpretLiteral : literalS ~> valS.
-End Literal.
-
-Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
-       (L : Literal VT) (S : AbstractStore VT) (H : AbstractHeap PT VT) : PrimitiveCommand PT VT S H.
-  Open Scope type_scope.
-  Module TS := Types PT VT S H.
-  Module CA := CommandAux PT VT S H.
-  Import PT VT L S H TS CA.
-
-  Definition freeVarsPrimitiveCommand := @qalPrimitiveCommandFreeVars literal pred.
+  Definition freeVarsPrimitiveCommand := qalPrimitiveCommandFreeVars.
 
   Definition qalTerm := @term literal.
   Instance qalTermS : Setoid qalTerm := @termS literal.
@@ -222,8 +237,10 @@ Module QALPrimitiveCommand (PT : PredType) (VT : ValType)
     solve_properS deletePropGeneric.
   Qed.
 
-Fixpoint _reduce (pc : qalPrimitiveCommand)  : state unit :=
+  Fixpoint _reduce (pc : qalPrimitiveCommand)  : state unit :=
     match pc with
+      | pcBuiltIn b =>
+        interpretBuiltInCommand @ b
       | pcInsert pred tl =>
         insertGeneric pred tl
       | pcDelete pred tl =>
@@ -236,9 +253,9 @@ Fixpoint _reduce (pc : qalPrimitiveCommand)  : state unit :=
         lookupGeneric pred tl
     end
   .
-
-  Definition reduce : (@qalPrimitiveCommandS literal pred ) ~> stateS unitS := injF _reduce _.
-  Definition primitiveCommand := @qalPrimitiveCommand literal pred.
-  Definition primitiveCommandS := @qalPrimitiveCommandS literal pred.
+  
+  Definition reduce : (@qalPrimitiveCommandS literal pred builtInCommand ) ~> stateS unitS := injF _reduce _.
+  Definition primitiveCommand := @qalPrimitiveCommand literal pred builtInCommand .
+  Definition primitiveCommandS := @qalPrimitiveCommandS literal pred builtInCommand.
   Definition interpretPrimitiveCommand := reduce.
 End QALPrimitiveCommand.

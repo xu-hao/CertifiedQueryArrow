@@ -59,7 +59,6 @@ QAL/AbstractHeap.v
 QAL/AbstractStore.v
 QAL/Concrete/Aggregator.v
 QAL/Concrete/PrimitiveCommand.v
-QAL/Concrete/Definitions.v
 QAL/Concrete/Store.v
 QAL/Concrete/Heap.v
 Lens/Lista.v
